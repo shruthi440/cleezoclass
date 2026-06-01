@@ -37,6 +37,7 @@ import TeacherCounselling from './TeacherDashboard/Teacher_Councelling';
 import TeacherModuleSummary from './TeacherDashboard/TeacherModuleSummary';
 import ParentDashboard from './ParentDashboard/ParentDashboard';
 import ParentAcademic from './ParentDashboard/ParentAcademic';
+import ParentAttendance from './ParentDashboard/ParentAttendance';
 import ParentFees from './ParentDashboard/ParentFees';
 import ParentHomework from './ParentDashboard/ParentHomwork';
 import ParentTimetable from './ParentDashboard/ParentTimetable';
@@ -52,6 +53,8 @@ import ExamManagement from './chiefdashboard/Chief_operation_ExamManagement';
 import Meetings from './chiefdashboard/Chief_operation_Meetings';
 import ChiefAttendanceAndPayroll from './chiefdashboard/ChiefAttendanceAndPayroll';
 import ParentStudentIconManagement from './ParentDashboard/ParentDetails';
+import AccountantDashboard from './AccountantDashboard/AccountantDashboard';
+import BusManagerDashboard from './BusManagerDashboard';
 
 type RootStackParamList = {
   TeacherLogin: undefined;
@@ -76,6 +79,7 @@ type RootStackParamList = {
   ParentDetails: { username?: string; name?: string } | undefined;
   ParentDashboard: { username?: string; name?: string } | undefined;
   ParentAcademic: { username?: string; name?: string } | undefined;
+  ParentAttendance: { username?: string; name?: string } | undefined;
   ParentFees: { username?: string; name?: string } | undefined;
   ParentHomework: { username?: string; name?: string } | undefined;
   ParentTimetable: { username?: string; name?: string } | undefined;
@@ -84,7 +88,9 @@ type RootStackParamList = {
   ParentLiveChatTicket: { username?: string; name?: string } | undefined;
   ParentHomepage: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;
+  AccountantDashboard: { username?: string; name?: string } | undefined;
   ChiefDashboard: { username?: string; name?: string } | undefined;
+  BusManagerDashboard: undefined;
   AcademicStudent: undefined;
   AcademicTeacher: undefined;
   ExamManagement: undefined;
@@ -244,6 +250,10 @@ const App = () => {
                     component={ParentAcademic as React.ComponentType<any>}
                   />
                   <Stack.Screen
+                    name="ParentAttendance"
+                    component={ParentAttendance as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
                     name="ParentFees"
                     component={ParentFees as React.ComponentType<any>}
                   />
@@ -336,7 +346,15 @@ const App = () => {
                     component={ParentStudentIconManagement }
                   />
                   <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
+                  <Stack.Screen
+                    name="AccountantDashboard"
+                    component={AccountantDashboard as React.ComponentType<any>}
+                  />
                   <Stack.Screen name="ChiefDashboard" component={ChiefDashboard} />
+                  <Stack.Screen
+                    name="BusManagerDashboard"
+                    component={BusManagerDashboard as React.ComponentType<any>}
+                  />
                   <Stack.Screen
                     name="AcademicStudent"
                     component={AcademicStudent as React.ComponentType<any>}

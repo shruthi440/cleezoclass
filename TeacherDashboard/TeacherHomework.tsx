@@ -683,6 +683,8 @@ const local = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -839,7 +841,7 @@ const local = StyleSheet.create({
   fileCard: {
     backgroundColor: '#FAFAFB',
     borderWidth: 1,
-    borderColor: '#E8EBF0',
+    borderColor: '#DDE3EA',
     borderRadius: 18,
     padding: 12,
     marginBottom: 10,

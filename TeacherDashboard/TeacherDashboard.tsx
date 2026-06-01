@@ -874,9 +874,7 @@ const TeacherDashboard = () => {
                 </Text>
               </View>
               <View style={styles.toolbarSpacer} />
-              <Pressable style={styles.toolbarButton}>
-                <FontAwesome name="bell" size={18} color="#F4F4F4" />
-              </Pressable>
+             
             </View>
 
             <View style={styles.chipRowSection}>
@@ -953,7 +951,6 @@ const TeacherDashboard = () => {
 
               <View style={styles.dashboardStickyHeader}>
                 <Text style={styles.sectionTitle}>Teacher Dashboard</Text>
-
                 <ScrollView
                   horizontal
                   nestedScrollEnabled
@@ -974,15 +971,15 @@ const TeacherDashboard = () => {
                         <Pressable
                           key={tile.label}
                           style={[
-                            styles.dashboardGridCard,
+                            styles.dashboardGridCardThree,
                             selectedModule === tile.label && styles.dashboardGridCardActive,
                           ]}
                           onPress={() => handleTilePress(tile)}
                         >
-                          <View style={styles.gridIconWrap}>
+                          <View style={styles.dashboardTileIconWrap}>
                             {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
                           </View>
-                          <Text style={styles.gridLabel}>{tile.label}</Text>
+                          <Text style={styles.dashboardTileLabel}>{tile.label}</Text>
                         </Pressable>
                       ))}
                     </View>

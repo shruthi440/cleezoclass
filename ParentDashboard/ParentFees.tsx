@@ -10,11 +10,15 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import { createAppStyles } from '../App.styles';
 import { ErrorContext } from '../ErrorContext';
 import { RootStackParamList } from '../types';
 
@@ -243,6 +247,11 @@ const buildRowsFromSource = (
 };
 
 const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) => {
+  const { height, width } = useWindowDimensions();
+  const appStyles = useMemo(
+    () => createAppStyles({ phoneWidth: width, phoneHeight: height }),
+    [height, width],
+  );
   const [studentData, setStudentData] = useState<Record<string, any> | null>(null);
   const [classFeeSource, setClassFeeSource] = useState<Record<string, any> | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<string, any> | null>(null);
@@ -485,6 +494,8 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
     return Math.max(summaryTotalFee - summaryPaid - summaryDiscount, 0);
   }, [summaryDiscount, summaryPaid, summaryTotalFee]);
 
+  const feeChartMax = Math.max(summaryPaid, summaryDue, 1);
+
   const studentProfile = useMemo(
     () => ({
       studentName: paymentDetails?.studentName || studentData?.name || '-',
@@ -510,43 +521,95 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
 
   const content = (
     <View style={embedded ? styles.embeddedContent : styles.content}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D3F66" translucent={false} />
 
-      {!embedded ? (
-        <View style={styles.headerRow}>
-          <View style={styles.headerBrand}>
-            <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+      <LinearGradient
+        colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.feeGradientSection}
+      >
+        {!embedded ? (
+          <View style={styles.headerRow}>
+            
+        
+            
           </View>
-          <View style={styles.headerTitleBlock}>
-            <Text style={styles.title}>Fees</Text>
-            <Text style={styles.subtitle}>
-              {studentProfile.studentName} {studentData?.class_name || ''}
-            </Text>
+        ) : null}
+
+        <View style={styles.feeGraphSection}>
+          <View style={styles.feeGraphTitleRow}>
+            <Text style={styles.feeGraphTitle}>Fee Status</Text>
+            <Text style={styles.feeGraphSubtitle}>Paid amount vs amount remaining</Text>
           </View>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack?.()}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
+
+          <View style={styles.feeLegendRow}>
+            <View style={styles.feeLegendItem}>
+              <View style={[styles.feeLegendDot, { backgroundColor: '#2EE59D' }]} />
+              <Text style={styles.feeLegendText}>Paid so far</Text>
+            </View>
+            <View style={styles.feeLegendItem}>
+              <View style={[styles.feeLegendDot, { backgroundColor: '#F36B79' }]} />
+              <Text style={styles.feeLegendText}>Amount remaining</Text>
+            </View>
+          </View>
+
+          <View style={styles.feeChartCard}>
+            <View style={styles.feeChartGrid}>
+              {[
+                { label: 'Paid so far', value: summaryPaid, color: '#2EE59D' },
+                { label: 'Amount remaining', value: summaryDue, color: '#F36B79' },
+              ].map((item) => {
+                const heightPct = `${Math.max(6, (item.value / feeChartMax) * 100)}%`;
+                return (
+                  <View key={item.label} style={styles.feeChartItem}>
+                    <Text style={styles.feeChartValue}>{formatINR(item.value)}</Text>
+                    <View style={styles.feeChartBarTrack}>
+                      <View
+                        style={[
+                          styles.feeChartBarFill,
+                          {
+                            height: heightPct,
+                            backgroundColor: item.color,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.feeChartLabel}>{item.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
         </View>
-      ) : null}
+      </LinearGradient>
 
       <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.studentDataWrap}>
-      
-
         <View style={styles.transactionWrap}>
           <View style={styles.summaryRow}>
-            <View style={[styles.summaryCard, styles.summaryCardLeft]}>
-              <Text style={styles.summaryLabel}>Total Fee</Text>
-              <Text style={styles.summaryAmount}>{formatINR(summaryTotalFee)}</Text>
-              <View style={styles.summaryDivider} />
-              <Text style={styles.summaryLabel}>Discount</Text>
-              <Text style={styles.summaryAmountSmall}>{formatINR(summaryDiscount)}</Text>
+            <View style={[appStyles.dashboardGridCard, styles.summaryCardLeft]}>
+              <View style={appStyles.dashboardGridCornerAccent} />
+              <View style={appStyles.gridIconWrap}>
+                <MaterialIcons name="payments" size={24} color="#000000" />
+              </View>
+              <View style={styles.summaryCardContent}>
+                <Text style={appStyles.gridLabel}>Discount</Text>
+                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryDiscount)}</Text>
+                <Text style={[appStyles.gridLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryTotalFee)}</Text>
+              </View>
             </View>
-            <View style={[styles.summaryCard, styles.summaryCardRight]}>
-              <Text style={styles.summaryLabel}>Paid</Text>
-              <Text style={styles.summaryAmount}>{formatINR(summaryPaid)}</Text>
-              <View style={styles.summaryDivider} />
-              <Text style={styles.summaryLabel}>Due</Text>
-              <Text style={[styles.summaryAmountSmall, styles.summaryDueAmount]}>{formatINR(summaryDue)}</Text>
+            <View style={[appStyles.dashboardGridCard, styles.summaryCardRight]}>
+              <View style={appStyles.dashboardGridCornerAccent} />
+              <View style={appStyles.gridIconWrap}>
+                <MaterialIcons name="account-balance-wallet" size={24} color="#000000" />
+              </View>
+              <View style={styles.summaryCardContent}>
+                <Text style={appStyles.gridLabel}>Due</Text>
+                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryDue)}</Text>
+                <Text style={[appStyles.gridLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryPaid)}</Text>
+              </View>
             </View>
           </View>
 
@@ -586,10 +649,10 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F6F7' },
-  content: { flex: 1, padding: 16, paddingBottom: 20 },
+  safeArea: { flex: 1, backgroundColor: '#f6f6f7' },
+  content: { flex: 1, paddingHorizontal: 16, paddingTop: 0, paddingBottom: 20, backgroundColor: '#FFFFFF' },
   embeddedContent: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 20 },
-  embeddedShell: { flex: 1, backgroundColor: '#F6F6F7' },
+  embeddedShell: { flex: 1, backgroundColor: '#FFFFFF' },
   embeddedCard: { marginHorizontal: 0 },
   headerRow: {
     flexDirection: 'row',
@@ -604,6 +667,103 @@ const styles = StyleSheet.create({
   logo: { width: 30, height: 30 },
   backBtn: { backgroundColor: '#404040', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18 },
   backBtnText: { color: '#fff', fontWeight: '700' },
+  feeGradientSection: {
+    marginHorizontal: -16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  feeGraphSection: {
+    paddingTop: 4,
+  },
+  feeGraphTitleRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  feeGraphTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#111',
+  },
+  feeGraphSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    textAlign: 'left',
+  },
+  feeLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  feeLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  feeLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginRight: 6,
+  },
+  feeLegendText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '700',
+  },
+  feeChartCard: {
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  feeChartGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    minHeight: 220,
+  },
+  feeChartItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 8,
+  },
+  feeChartValue: {
+    color: '#111',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  feeChartBarTrack: {
+    width: '62%',
+    height: 170,
+    backgroundColor: 'rgba(17,24,39,0.08)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  feeChartBarFill: {
+    width: '100%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    minHeight: 10,
+  },
+  feeChartLabel: {
+    color: '#333',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
   tabRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -660,28 +820,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
-  summaryCard: {
-    width: '48%',
-    minHeight: 108,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 10,
+  summaryCardLeft: { marginRight: 8 },
+  summaryCardRight: { marginLeft: 8 },
+  summaryCardContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'flex-end',
     justifyContent: 'center',
+    paddingTop: 22,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
   },
-  summaryCardLeft: { backgroundColor: '#D7E8C9', marginRight: 8 },
-  summaryCardRight: { backgroundColor: '#F2EE9E', marginLeft: 8 },
-  summaryLabel: { fontSize: 12, color: '#666', fontWeight: '700' },
-  summaryAmount: { marginTop: 6, fontSize: 18, color: '#111', fontWeight: '800' },
-  summaryAmountSmall: { marginTop: 4, fontSize: 17, color: '#111', fontWeight: '800' },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#ddd',
-    marginVertical: 10,
-  },
-  summaryDueAmount: { color: '#111' },
   tableCard: {
     flex: 1,
     borderRadius: 18,

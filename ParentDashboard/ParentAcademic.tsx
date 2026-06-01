@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -13,9 +12,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import LinearGradient from 'react-native-linear-gradient';
 import { LineChart } from 'react-native-chart-kit';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+import { createAppStyles } from '../App.styles';
 import { ErrorContext } from '../ErrorContext';
 import { RootStackParamList } from '../types';
 
@@ -137,40 +139,6 @@ const buildTrendPoints = (
     };
   });
 
-const buildTrendSummary = (points: TrendPoint[]) => {
-  const validPoints = points.filter(point => point.value !== null);
-  const transitions = [];
-
-  for (let i = 1; i < validPoints.length; i += 1) {
-    const prev = validPoints[i - 1];
-    const current = validPoints[i];
-    const diff = Number(((current.value ?? 0) - (prev.value ?? 0)).toFixed(2));
-    transitions.push({
-      from: prev.label,
-      to: current.label,
-      diff,
-      improved: diff > 0,
-      status: diff > 0 ? 'Improved' : diff < 0 ? 'Declined' : 'No Change',
-    });
-  }
-
-  const overallDiff =
-    validPoints.length >= 2
-      ? Number(
-          (
-            (validPoints[validPoints.length - 1].value ?? 0) -
-            (validPoints[0].value ?? 0)
-          ).toFixed(2),
-        )
-      : null;
-
-  return {
-    validPoints,
-    transitions,
-    overallDiff,
-  };
-};
-
 const getSubjectTrendKey = (subject: AcademicSubject, index: number) =>
   String(
     subject.name ||
@@ -274,13 +242,16 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
   embedded = false,
 }) => {
   const { height, width } = useWindowDimensions();
+  const appStyles = useMemo(
+    () => createAppStyles({ phoneWidth: width, phoneHeight: height }),
+    [height, width],
+  );
   const [studentData, setStudentData] = useState<Record<string, any> | null>(
     null,
   );
   const [performance, setPerformance] = useState<AcademicSubject[]>([]);
   const [testTypes, setTestTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [trendVisible, setTrendVisible] = useState(false);
   const [trendSubjectKey, setTrendSubjectKey] = useState('__all__');
   const { showError } = React.useContext(ErrorContext);
 
@@ -413,20 +384,19 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     );
     return matchedIndex >= 0 ? performance[matchedIndex] : null;
   }, [performance, trendSubjectKey]);
-  const activeTrend = useMemo(() => {
-    const sourceRows = selectedSubjectRow ? [selectedSubjectRow] : performance;
-    return buildTrendSummary(buildTrendPoints(sourceRows, termRowsForSummary));
-  }, [performance, selectedSubjectRow, termRowsForSummary]);
-  const chartPoints = activeTrend.validPoints;
-  const chartLabels = chartPoints.map(point => point.label);
-  const chartData = chartPoints.map(point => point.value ?? 0);
-  const chartWidth = Math.max(width - 48, chartPoints.length * 72);
   const activeTrendTitle = selectedSubjectRow
     ? getSubjectDisplayName(
         selectedSubjectRow,
         performance.findIndex((subject) => subject === selectedSubjectRow),
       )
     : 'All Subjects';
+  const chartPoints = buildTrendPoints(
+    selectedSubjectRow ? [selectedSubjectRow] : performance,
+    termRowsForSummary,
+  );
+  const chartLabels = chartPoints.map(point => point.label);
+  const chartData = chartPoints.map(point => point.value ?? 0);
+  const chartWidth = Math.max(width - 48, chartPoints.length * 72);
 
   const getDisplayMark = (subj: AcademicSubject, row: any) => {
     const testEntry = subj?.tests?.[row?.key];
@@ -444,11 +414,6 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     return mark ?? '-';
   };
 
-  const subjectListHeight = Math.max(
-    260,
-    Math.min(height * 0.5, embedded ? 380 : 460),
-  );
-
   if (loading || !studentData) {
     return (
       <View style={embedded ? styles.embeddedShell : styles.safeArea}>
@@ -462,53 +427,206 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
 
   const content = (
     <View style={embedded ? styles.embeddedContent : styles.content}>
-      <View style={styles.headerTopRow}>
-        <View style={styles.headerLeftColumn}>
-          <Text style={styles.title}>Academic</Text>
-          <Text numberOfLines={1} style={styles.subtitle}>
-            {studentData?.name || '-'} {studentData?.class_name || ''}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.summaryRowTop}>
-        <View style={[styles.summaryCardTop, styles.summaryCardOverall, styles.summaryCardLeft]}>
-          <Text style={styles.summaryLabelPlain}>Overall</Text>
-          <Text style={styles.gradeCompact}>{summary.grade}</Text>
-          <View style={styles.summaryPercentRow}>
-            <Text style={styles.percentCompact}>{summary.percentage}%</Text>
-            <TouchableOpacity
-              style={[
-                styles.graphBtn,
-                chartPoints.length < 2 && styles.graphBtnDisabled,
-              ]}
-              onPress={() => setTrendVisible(true)}
-              disabled={chartPoints.length < 2}
-            >
-              <Text style={styles.graphBtnText}>Graph</Text>
-            </TouchableOpacity>
+      <LinearGradient
+        colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.academicGradientSection}
+      >
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerLeftColumn}>
+            <Text style={styles.title}>Academic</Text>
+            <Text numberOfLines={1} style={styles.subtitle}>
+              {studentData?.name || '-'} {studentData?.class_name || ''}
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.summaryCardTop, styles.summaryCardPrevious, styles.summaryCardRight]}>
-          <Text style={styles.summaryLabelPlain}>Previous Test</Text>
-          <Text style={styles.gradeCompact}>{previousTestSummary.grade}</Text>
-          <Text style={styles.percentCompact}>
-            {previousTestRow?.label || 'Last test'}
+        <View style={styles.academicGraphSection}>
+          <View style={styles.trendSelectorWrap}>
+            <Text style={styles.trendSelectorLabel}>Choose a subject</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.trendSelectorChips}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.trendChip,
+                  trendSubjectKey === '__all__' && styles.trendChipActive,
+                ]}
+                onPress={() => setTrendSubjectKey('__all__')}
+              >
+                <Text
+                  style={[
+                    styles.trendChipText,
+                    trendSubjectKey === '__all__' && styles.trendChipTextActive,
+                  ]}
+                >
+                  All Subjects
+                </Text>
+              </TouchableOpacity>
+
+              {subjectOptions.map((subject) => (
+                <TouchableOpacity
+                  key={subject.key}
+                  style={[
+                    styles.trendChip,
+                    trendSubjectKey === subject.key && styles.trendChipActive,
+                  ]}
+                  onPress={() => setTrendSubjectKey(subject.key)}
+                >
+                  <Text
+                    style={[
+                      styles.trendChipText,
+                      trendSubjectKey === subject.key && styles.trendChipTextActive,
+                    ]}
+                  >
+                    {subject.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.trendActiveTitleRow}>
+            <Text style={styles.trendActiveTitle}>{activeTrendTitle}</Text>
+            {chartPoints.length >= 2 &&
+            chartPoints[chartPoints.length - 1].value !== null &&
+            chartPoints[0].value !== null ? (
+              <Text
+                style={[
+                  styles.trendOverallDiffValue,
+                  (chartPoints[chartPoints.length - 1].value ?? 0) >
+                  (chartPoints[0].value ?? 0)
+                    ? styles.trendStatDiffUp
+                    : (chartPoints[chartPoints.length - 1].value ?? 0) <
+                      (chartPoints[0].value ?? 0)
+                    ? styles.trendStatDiffDown
+                    : styles.trendStatDiffFlat,
+                ]}
+              >
+                {(
+                  (chartPoints[chartPoints.length - 1].value ?? 0) -
+                  (chartPoints[0].value ?? 0)
+                ) > 0
+                  ? '+'
+                  : ''}
+                {Number(
+                  (
+                    (chartPoints[chartPoints.length - 1].value ?? 0) -
+                    (chartPoints[0].value ?? 0)
+                  ).toFixed(2),
+                )}
+                %
+              </Text>
+            ) : null}
+          </View>
+
+          <Text style={styles.academicGraphExplain}>
+            This line shows the average score in each test. A higher line means better performance.
           </Text>
+
+          <View style={styles.academicLegendRow}>
+            <View style={styles.academicLegendItem}>
+              <View style={[styles.academicLegendDot, { backgroundColor: '#F36B79' }]} />
+              <Text style={styles.academicLegendText}>Average test score</Text>
+            </View>
+            <View style={styles.academicLegendItem}>
+              <View style={[styles.academicLegendDot, { backgroundColor: '#E9E9EE' }]} />
+              <Text style={styles.academicLegendText}>Each point is one test</Text>
+            </View>
+          </View>
+
+          {chartPoints.length < 2 ? (
+            <View style={styles.academicGraphEmptyPlain}>
+              <Text style={styles.academicGraphEmptyTitlePlain}>Not enough test data yet</Text>
+              <Text style={styles.academicGraphEmptyTextPlain}>
+                Add at least two tests to see how performance changes over time.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <LineChart
+                data={{
+                  labels: chartLabels,
+                  datasets: [
+                    {
+                      data: chartData,
+                      color: opacity => `rgba(243, 107, 121, ${opacity})`,
+                      strokeWidth: 3,
+                    },
+                  ],
+                }}
+                width={chartWidth}
+                height={240}
+                yAxisSuffix="%"
+                fromZero
+                withDots
+                withInnerLines={false}
+                withOuterLines
+                segments={4}
+                bezier
+                chartConfig={{
+                  backgroundColor: '#FFFFFF',
+                  backgroundGradientFrom: '#FFFFFF',
+                  backgroundGradientTo: '#FFFFFF',
+                  decimalPlaces: 1,
+                  color: opacity => `rgba(243, 107, 121, ${opacity})`,
+                  fillShadowGradientFrom: 'rgba(243, 107, 121, 0.55)',
+                  fillShadowGradientTo: 'rgba(243, 107, 121, 0.08)',
+                  fillShadowGradientOpacity: 1,
+                  labelColor: () => '#7A7A80',
+                  propsForDots: {
+                    r: '5',
+                    strokeWidth: '2',
+                    stroke: '#F36B79',
+                  },
+                  propsForBackgroundLines: {
+                    stroke: '#E9E9EE',
+                    strokeDasharray: '',
+                  },
+                }}
+                style={styles.academicChartPlain}
+              />
+            </ScrollView>
+          )}
+        </View>
+      </LinearGradient>
+
+      <View style={styles.summaryRowTop}>
+        <View style={[appStyles.dashboardGridCard, styles.summaryCardLeft]}>
+          <View style={appStyles.dashboardGridCornerAccent} />
+          <View style={appStyles.gridIconWrap}>
+            <MaterialIcons name="school" size={24} color="#000000" />
+          </View>
+          <View style={appStyles.dashboardGridCardContent}>
+            <View style={appStyles.dashboardGridTextBlock}>
+              <Text style={appStyles.gridLabel}>Overall</Text>
+              <Text style={appStyles.dashboardGridMetaLabel}>{summary.grade}</Text>
+              <Text style={appStyles.dashboardGridMetaValue}>{summary.percentage}%</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={[appStyles.dashboardGridCard, styles.summaryCardRight]}>
+          <View style={appStyles.dashboardGridCornerAccent} />
+          <View style={appStyles.gridIconWrap}>
+            <MaterialIcons name="quiz" size={24} color="#000000" />
+          </View>
+          <View style={appStyles.dashboardGridCardContent}>
+            <View style={appStyles.dashboardGridTextBlock}>
+              <Text style={appStyles.gridLabel}>Previous Test</Text>
+              <Text style={appStyles.dashboardGridMetaLabel}>{previousTestSummary.grade}</Text>
+              <Text style={appStyles.dashboardGridMetaValue}>
+                {previousTestRow?.label || 'Last test'}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      {!embedded ? (
-        <View style={styles.backRow}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation?.goBack?.()}
-          >
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+
 
       {performance.length === 0 ? (
         <Text style={styles.emptyText}>No academic data.</Text>
@@ -517,18 +635,24 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
           style={[
             styles.subjectsPanel,
             embedded && styles.embeddedSubjectsPanel,
-            { maxHeight: subjectListHeight },
           ]}
         >
           <ScrollView
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
+            style={styles.subjectsScroll}
             contentContainerStyle={styles.subjectsScrollContent}
           >
             {performance.map((subject, index) => (
               <View
                 key={`${subject.name || 'subj'}-${index}`}
-                style={styles.subjectCard}
+                style={[
+                  styles.subjectCard,
+                  {
+                    backgroundColor: index % 2 === 0 ? '#FFF9FB' : '#F7FBFF',
+                    borderLeftColor: ['#EF6574', '#4AC8D8', '#7A3FC5', '#F2D84A'][index % 4],
+                  },
+                ]}
               >
                 <Text style={styles.subjectTitle}>
                   {getSubjectDisplayName(subject, index)}
@@ -555,177 +679,6 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
         </View>
       )}
 
-      <Modal
-        visible={trendVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setTrendVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.trendModal}>
-            <View style={styles.trendModalHeader}>
-              <View style={styles.trendModalHeaderText}>
-                <Text style={styles.trendModalTitle}>Study Graph</Text>
-                <Text style={styles.trendModalSubtitle}>
-                  {studentData?.name || '-'} {studentData?.class_name || ''}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.trendCloseBtn}
-                onPress={() => setTrendVisible(false)}
-              >
-                <Text style={styles.trendCloseBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              contentContainerStyle={styles.trendModalContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.trendSelectorWrap}>
-                <Text style={styles.trendSelectorLabel}>Subject</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.trendSelectorChips}
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.trendChip,
-                      trendSubjectKey === '__all__' && styles.trendChipActive,
-                    ]}
-                    onPress={() => setTrendSubjectKey('__all__')}
-                  >
-                    <Text
-                      style={[
-                        styles.trendChipText,
-                        trendSubjectKey === '__all__' && styles.trendChipTextActive,
-                      ]}
-                    >
-                      All Subjects
-                    </Text>
-                  </TouchableOpacity>
-
-                  {subjectOptions.map((subject) => (
-                    <TouchableOpacity
-                      key={subject.key}
-                      style={[
-                        styles.trendChip,
-                        trendSubjectKey === subject.key && styles.trendChipActive,
-                      ]}
-                      onPress={() => setTrendSubjectKey(subject.key)}
-                    >
-                      <Text
-                        style={[
-                          styles.trendChipText,
-                          trendSubjectKey === subject.key &&
-                            styles.trendChipTextActive,
-                        ]}
-                      >
-                        {subject.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {chartPoints.length < 2 ? (
-                <View style={styles.trendEmptyState}>
-                  <Text style={styles.trendEmptyTitle}>Not enough test data</Text>
-                  <Text style={styles.trendEmptyText}>
-                    Add at least two test records to display the graph.
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <View style={styles.trendActiveTitleRow}>
-                    <Text style={styles.trendActiveTitle}>{activeTrendTitle}</Text>
-                    {activeTrend.overallDiff !== null ? (
-                      <Text
-                        style={[
-                          styles.trendOverallDiffValue,
-                          activeTrend.overallDiff > 0
-                            ? styles.trendStatDiffUp
-                            : activeTrend.overallDiff < 0
-                            ? styles.trendStatDiffDown
-                            : styles.trendStatDiffFlat,
-                        ]}
-                      >
-                        {activeTrend.overallDiff > 0 ? '+' : ''}
-                        {activeTrend.overallDiff}%
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.trendChartWrap}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <LineChart
-                        data={{
-                          labels: chartLabels,
-                          datasets: [
-                            {
-                              data: chartData,
-                              color: opacity => `rgba(239, 101, 116, ${opacity})`,
-                              strokeWidth: 3,
-                            },
-                          ],
-                        }}
-                        width={chartWidth}
-                        height={240}
-                        yAxisSuffix="%"
-                        fromZero
-                        withDots
-                        withInnerLines={false}
-                        withOuterLines
-                        segments={4}
-                        bezier
-                        chartConfig={{
-                          backgroundColor: '#ffffff',
-                          backgroundGradientFrom: '#ffffff',
-                          backgroundGradientTo: '#ffffff',
-                          decimalPlaces: 1,
-                          color: opacity => `rgba(239, 101, 116, ${opacity})`,
-                          labelColor: () => '#667085',
-                          propsForDots: {
-                            r: '4',
-                            strokeWidth: '2',
-                            stroke: '#ef6574',
-                          },
-                          propsForBackgroundLines: {
-                            stroke: '#e5e7eb',
-                            strokeDasharray: '',
-                          },
-                        }}
-                        style={styles.trendChart}
-                      />
-                    </ScrollView>
-                  </View>
-
-                  <View style={styles.trendTransitions}>
-                    {activeTrend.transitions.map((item: any) => (
-                      <Text
-                        key={`${item.from}-${item.to}`}
-                        style={[
-                          styles.trendTransition,
-                          item.improved
-                            ? styles.trendTransitionUp
-                            : item.diff < 0
-                            ? styles.trendTransitionDown
-                            : styles.trendTransitionFlat,
-                        ]}
-                      >
-                        {item.from} to {item.to}: {item.status} (
-                        {item.diff > 0 ? '+' : ''}
-                        {item.diff}%)
-                      </Text>
-                    ))}
-                  </View>
-                </>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 
@@ -733,15 +686,21 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     <View style={styles.embeddedCard}>{content}</View>
   ) : (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D3F66" translucent={false} />
       {content}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F6F7' },
-  content: { flex: 1, padding: 16, paddingBottom: 28 },
+  safeArea: { flex: 1, backgroundColor: '#f6f6f7' },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 28,
+    backgroundColor: '#FFFFFF',
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -777,6 +736,72 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   backBtnText: { color: '#fff', fontWeight: '700' },
+  academicGradientSection: {
+    marginTop: 0,
+    marginBottom: 12,
+    marginHorizontal: -16,
+    paddingTop: 16,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+  },
+  academicGraphSection: {
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  academicGraphExplain: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#444',
+    marginBottom: 8,
+  },
+  academicLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  academicLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  academicLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginRight: 6,
+  },
+  academicLegendText: {
+    fontSize: 11.5,
+    color: '#333',
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  academicChartPlain: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+  },
+  academicGraphEmpty: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  academicGraphEmptyTitle: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  academicGraphEmptyText: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+  },
   embeddedShell: { padding: 0 },
   embeddedHeader: { marginBottom: 12 },
   embeddedTitle: { fontSize: 22, fontWeight: '800', color: '#111' },
@@ -795,18 +820,19 @@ const styles = StyleSheet.create({
   grade: { fontSize: 40, fontWeight: '800', color: '#111', marginTop: 8 },
   percent: { fontSize: 16, color: '#444', marginTop: 4 },
   gradeCompact: {
-    fontSize: 34,
+    fontSize: 18,
+    lineHeight: 22,
     fontWeight: '800',
-    color: '#111',
+    color: '#191919',
     marginTop: 4,
-    textAlign: 'left',
+    textAlign: 'center',
   },
-  percentCompact: { fontSize: 14, color: '#444', marginTop: 2, textAlign: 'left' },
-  summaryPercentRow: {
+  percentCompact: {
+    fontSize: 14,
+    color: '#444',
     marginTop: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    textAlign: 'center',
+    fontWeight: '700',
   },
   graphBtn: {
     paddingHorizontal: 10,
@@ -837,31 +863,14 @@ const styles = StyleSheet.create({
   summaryRowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 6,
     marginBottom: 8,
-  },
-  summaryCardTop: {
-    flex: 1,
-    minHeight: 108,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
   },
   summaryCardLeft: {
     marginRight: 8,
   },
-  summaryCardOverall: {
-    backgroundColor: '#D7E8C9',
-  },
   summaryCardRight: {
     marginLeft: 8,
-  },
-  summaryCardPrevious: {
-    backgroundColor: '#F2EE9E',
   },
   subjectsPanel: {
     backgroundColor: '#f6f6f7',
@@ -870,9 +879,16 @@ const styles = StyleSheet.create({
     borderColor: '#f6f6f7',
     padding: 12,
     marginBottom: 12,
+    flex: 1,
+    minHeight: 0,
   },
   embeddedSubjectsPanel: {
     padding: 0,
+    flex: 1,
+  },
+  subjectsScroll: {
+    flex: 1,
+    minHeight: 0,
   },
   subjectsScrollContent: {
     paddingBottom: 4,
@@ -880,12 +896,11 @@ const styles = StyleSheet.create({
   subjectCard: {
     backgroundColor: '#f6f6f7',
     borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e5e5e7',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',   
-
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
+    borderBottomColor: '#e5e5e7',
+    borderLeftWidth: 5,
     padding: 14,
     marginBottom: 12,
   },
@@ -902,7 +917,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     color: '#666',
-    fontWeight: '700',
+    fontWeight: '700',   
   },
   cell: {
     flex: 1,

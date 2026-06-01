@@ -1973,9 +1973,7 @@ const DashboardScreen = () => {
                 </Text>
               </View>
               <View style={styles.toolbarSpacer} />
-              <Pressable style={styles.toolbarButton}>
-                <FontAwesome name="bell" size={18} color="#F4F4F4" />
-              </Pressable>
+              
             </View>
 
             <ScrollView
@@ -2042,12 +2040,12 @@ const DashboardScreen = () => {
                       key={tile.label}
                       hitSlop={8}
                       onPress={() => openModule(tile.chipLabel)}
-                      style={styles.dashboardGridCard}
+                      style={styles.dashboardGridCardThree}
                     >
-                      <View style={styles.gridIconWrap}>
+                      <View style={styles.dashboardTileIconWrap}>
                         {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
                       </View>
-                      <Text style={styles.gridLabel}>{tile.label}</Text>
+                      <Text style={styles.dashboardTileLabel}>{tile.label}</Text>
                     </Pressable>
                   ))}
                 </View>

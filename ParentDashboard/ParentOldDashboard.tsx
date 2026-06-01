@@ -1238,7 +1238,7 @@ useEffect(() => {
 style={[styles.iconImage,{ tintColor: '#0088cc' }]}          />
         </TouchableOpacity>
 </View>
-{chartData && (
+{chartData && (   
   <BarChart
     data={chartData}
     width={Dimensions.get("window").width - 20}

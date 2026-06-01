@@ -15,22 +15,23 @@ import {
   ActivityIndicator,
   Platform,
   PermissionsAndroid,
+  StyleSheet,
   useWindowDimensions,
 } from 'react-native';
-
+import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { globalStyles as styles } from '../inner';
 import { createAppStyles } from '../App.styles';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { BarChart } from 'react-native-chart-kit';
 
 import axios from 'axios';
 
 import RNFS from 'react-native-fs';
 
-// Import logic pieces or define sub-components here
-// For this example, I will define them as internal sub-components 
-// based on the code you provided in the JS files.
+
 
 const { width } = Dimensions.get('window');
 
@@ -108,13 +109,11 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
   const [currentMonthIndex, setCurrentMonthIndex] = useState(new Date().getMonth());
   const [events, setEvents] = useState<CalendarItem[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
-  const [loadingRequests, setLoadingRequests] = useState(false);
   const [approvedExtraClasses, setApprovedExtraClasses] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedDayItems, setSelectedDayItems] = useState<CalendarItem[]>([]);
   const [selectedDateLabel, setSelectedDateLabel] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [selectedDateKey, setSelectedDateKey] = useState('');
 
   useEffect(() => {
     fetchEvents();
@@ -159,8 +158,6 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
 
   const fetchRequests = async () => {
     try {
-      setLoadingRequests(true);
-
       const schoolCode = studentData?.schoolCode;
       if (!schoolCode) {
         console.warn('❌ No schoolCode, skipping request fetch');
@@ -182,8 +179,6 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
       console.error('❌ Error fetching requests:', err);
       Alert.alert('Error', 'Failed to fetch requests');
       setRequests([]);
-    } finally {
-      setLoadingRequests(false);
     }
   };
 
@@ -225,7 +220,6 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
   }, [requests, studentData?.class_name, studentData?.section]);
 
   const daysInMonth = new Date(currentYear, currentMonthIndex + 1, 0).getDate();
-  const firstDay = new Date(currentYear, currentMonthIndex, 1).getDay();
   const today = new Date();
   const toDateKey = (value: any) => {
     if (!value) return '';
@@ -252,6 +246,13 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
       return !!dateKey && dateKey >= todayKey;
       })
     .sort((a: any, b: any) => toDateKey(a?.request_date).localeCompare(toDateKey(b?.request_date)));
+  const monthKey = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
+  const monthExtraClasses = approvedExtraClasses.filter((row: any) => {
+    const dateKey = toDateKey(row?.request_date);
+    return !!dateKey && dateKey.startsWith(monthKey);
+  });
+  const calendarGraphLabels = ['Events', 'Extra classes'];
+  const calendarGraphData = [events.length, monthExtraClasses.length];
   const extraClassSummaryItems = upcomingExtraClasses.map((item: any) => ({
     id: item?.id,
     title: `Extra Class: ${item?.class || studentData?.class_name || 'Class'}`,
@@ -260,8 +261,8 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
     kind: 'event' as const,
     subtitle: 'Approved Extra Class',
   }));
-
   const days: React.ReactNode[] = [];
+  const firstDay = new Date(currentYear, currentMonthIndex, 1).getDay();
 
   for (let i = 0; i < firstDay; i++) {
     days.push(<View key={`empty-${i}`} style={styles.emptyDay} />);
@@ -284,14 +285,12 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
       today.getDate() === d &&
       today.getMonth() === currentMonthIndex &&
       today.getFullYear() === currentYear;
-    const isSelected = selectedDateKey === dayKey;
     const hasEvents = dayEvents.length > 0;
 
     const dayStyle = [
       styles.day,
       extraClass && styles.approvedDay,
       hasEvents && styles.eventDay,
-      isSelected && styles.eventDaySelected,
       isToday && styles.today,
     ].filter(Boolean);
 
@@ -300,8 +299,6 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
         key={`day-${d}`}
         style={dayStyle}
         onPress={() => {
-          setSelectedDateKey(dayKey);
-
           if (extraClass) {
             setSelectedEvent({
               title: 'Extra Class Approved',
@@ -325,41 +322,112 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
       </TouchableOpacity>
     );
   }
-const goToPrevMonth = () => {
-  setCurrentMonthIndex(prev => {
-    if (prev === 0) {
-      setCurrentYear(y => y - 1);
-      return 11;
-    }
-    return prev - 1;
-  });
-};
-const goToNextMonth = () => {
-  setCurrentMonthIndex(prev => {
-    if (prev === 11) {
-      setCurrentYear(y => y + 1);
-      return 0;
-    }
-    return prev + 1;
-  });
-};
+
+  const goToPrevMonth = () => {
+    setCurrentMonthIndex(prev => {
+      if (prev === 0) {
+        setCurrentYear(y => y - 1);
+        return 11;
+      }
+      return prev - 1;
+    });
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonthIndex(prev => {
+      if (prev === 11) {
+        setCurrentYear(y => y + 1);
+        return 0;
+      }
+      return prev + 1;
+    });
+  };
 
   return (
-    <View style={{ padding: 10 }}>
-      <View style={appStyles.statusCardsRow}>
+    <View style={calendarStyles.calendarContent}>
+      <LinearGradient
+        colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={calendarStyles.academicGraphSection}
+      >
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerLeftColumn}>
+            <Text style={styles.title}>Calendar</Text>
+            <Text numberOfLines={1} style={styles.subtitle}>
+              {studentData?.name || '-'} {studentData?.class_name || ''}
+            </Text>
+          </View>
+        </View>
+
+        <View style={calendarStyles.academicGraphSectionInner}>
+          <Text style={calendarStyles.academicGraphExplain}>
+            This chart compares the total events and approved extra classes for the selected month.
+          </Text>
+
+    
+          <View style={calendarStyles.academicLegendRow}>
+            <View style={calendarStyles.academicLegendItem}>
+              <View style={[calendarStyles.academicLegendDot, { backgroundColor: '#0D3F66' }]} />
+              <Text style={calendarStyles.academicLegendText}>Events</Text>
+            </View>
+            <View style={calendarStyles.academicLegendItem}>
+              <View style={[calendarStyles.academicLegendDot, { backgroundColor: '#F36B79' }]} />
+              <Text style={calendarStyles.academicLegendText}>Extra classes</Text>
+            </View>
+          </View>
+
+          {calendarGraphData.every((value) => value === 0) ? (
+            <View style={calendarStyles.academicGraphEmptyPlain}>
+              <Text style={calendarStyles.academicGraphEmptyTitlePlain}>Not enough month data yet</Text>
+              <Text style={calendarStyles.academicGraphEmptyTextPlain}>
+                Add events and extra classes to see the summary chart.
+              </Text>
+            </View>
+          ) : (
+            <BarChart
+              data={{
+                labels: calendarGraphLabels,
+                datasets: [{ data: calendarGraphData }],
+              }}
+              width={Math.max(width - 48, 280)}
+              height={220}
+              fromZero
+              showValuesOnTopOfBars
+              withInnerLines={false}
+              withOuterLines
+              segments={4}
+              chartConfig={{
+                backgroundColor: '#FFFFFF',
+                backgroundGradientFrom: '#FFFFFF',
+                backgroundGradientTo: '#FFFFFF',
+                decimalPlaces: 0,
+                color: opacity => `rgba(13, 63, 102, ${opacity})`,
+                labelColor: () => '#7A7A80',
+                propsForBackgroundLines: {
+                  stroke: '#E9E9EE',
+                  strokeDasharray: '',
+                },
+              }}
+              style={calendarStyles.academicChartPlain}
+            />
+          )}
+        </View>
+      </LinearGradient>
+
+      <View style={calendarStyles.summaryRow}>
         <View
           style={[
-            appStyles.statusCard,
-            appStyles.statusCardLeft,
-            { backgroundColor: '#D7E8C9' },
+            appStyles.dashboardGridCard,
+            calendarStyles.summaryCardLeft,
           ]}
         >
-          <View style={appStyles.statusCardText}>
-            <View style={appStyles.statusTitleRow}>
-              <Text style={appStyles.statusNumber}>Events</Text>
-              <Text style={appStyles.statusSubtitle}>{upcomingEvents.length}</Text>
-            </View>
-            <Text style={appStyles.statusFooter}>
+          <View style={appStyles.dashboardGridCornerAccent} />
+         
+          <View style={calendarStyles.summaryCardContent}>
+            <Text style={calendarStyles.summaryCardLabel}>Events</Text>
+            <Text style={calendarStyles.summaryCardValue}>{upcomingEvents.length}</Text>
+            <Text style={calendarStyles.summaryCardText}>
               {upcomingEvents[0]
                 ? `${formatCalendarDateLabel(upcomingEvents[0].date)} • ${upcomingEvents[0].title}`
                 : 'No upcoming events'}
@@ -371,29 +439,25 @@ const goToNextMonth = () => {
                 setSelectedDayItems(upcomingEvents);
                 setModalVisible(true);
               }}
-              style={appStyles.statusActionButton}
+              style={calendarStyles.summaryActionButton}
             >
-              <Text style={appStyles.statusActionLink}>View</Text>
+              <Text style={calendarStyles.summaryActionText}>View</Text>
             </Pressable>
-          </View>
-          <View style={appStyles.statusIconWrap}>
-            <Text style={{ fontSize: 28 }}>📅</Text>
           </View>
         </View>
 
         <View
           style={[
-            appStyles.statusCard,
-            appStyles.statusCardRight,
-            { backgroundColor: '#F2EE9E' },
+            appStyles.dashboardGridCard,
+            calendarStyles.summaryCardRight,
           ]}
         >
-          <View style={appStyles.statusCardText}>
-            <View style={appStyles.statusTitleRow}>
-              <Text style={appStyles.statusNumber}>Extra</Text>
-              <Text style={appStyles.statusSubtitle}>Classes</Text>
-            </View>
-            <Text style={appStyles.statusFooter}>
+          <View style={appStyles.dashboardGridCornerAccent} />
+         
+          <View style={calendarStyles.summaryCardContent}>
+            <Text style={calendarStyles.summaryCardLabel}>Extra Classes</Text>
+            <Text style={calendarStyles.summaryCardValue}>{upcomingExtraClasses.length}</Text>
+            <Text style={calendarStyles.summaryCardText}>
               {upcomingExtraClasses.length > 0
                 ? `${upcomingExtraClasses.length} upcoming`
                 : 'No upcoming extra classes'}
@@ -405,20 +469,14 @@ const goToNextMonth = () => {
                 setSelectedDayItems(extraClassSummaryItems);
                 setModalVisible(true);
               }}
-              style={appStyles.statusActionButton}
+              style={calendarStyles.summaryActionButton}
             >
-              <Text style={appStyles.statusActionLink}>View</Text>
+              <Text style={calendarStyles.summaryActionText}>View</Text>
             </Pressable>
-          </View>
-          <View style={appStyles.statusIconWrap}>
-            <Text style={{ fontSize: 28 }}>✨</Text>
           </View>
         </View>
       </View>
 
-      {loadingRequests ? (
-        <Text style={{ fontSize: 11, color: '#666', marginBottom: 6 }}>Loading extra class requests...</Text>
-      ) : null}
       <View style={styles.calendarContainer}>
         <View style={styles.monthNavigation}>
           <TouchableOpacity style={styles.navBtn} onPress={goToPrevMonth}>
@@ -469,7 +527,6 @@ const goToNextMonth = () => {
                 <View
                   key={`${item.id || idx}-${item.request_date}`}
                   style={{
-                    
                     backgroundColor: '#f6f6f7',
                     borderWidth: 1,
                     borderColor: '#F36B79',
@@ -484,7 +541,6 @@ const goToNextMonth = () => {
                   <Text style={{ color: '#2f5f3e', fontSize: 11, marginTop: 4 }}>
                     {item.teacher_name ? `Teacher: ${item.teacher_name}` : 'Extra class approved'}
                   </Text>
-                 
                 </View>
               );
             })}
@@ -537,6 +593,136 @@ const goToNextMonth = () => {
     </View>
   );
 };
+
+const calendarStyles = StyleSheet.create({
+  calendarContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 0,
+    paddingBottom: 24,
+  },
+  academicGraphSection: {
+    marginTop: 0,
+    marginBottom: 12,
+    marginHorizontal: -16,
+    paddingTop: 16,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+  },
+  academicGraphSectionInner: {
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  academicGraphExplain: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#444',
+    marginBottom: 8,
+  },
+  academicLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  academicLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  academicLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginRight: 6,
+  },
+  academicLegendText: {
+    fontSize: 11.5,
+    color: '#333',
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  academicGraphEmptyPlain: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  academicGraphEmptyTitlePlain: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    color: '#111',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  academicGraphEmptyTextPlain: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#444',
+    textAlign: 'center',
+  },
+  academicChartPlain: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  summaryCardLeft: {
+    marginRight: 8,
+  },
+  summaryCardRight: {
+    marginLeft: 8,
+  },
+  summaryCardContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 22,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
+  },
+  summaryCardLabel: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#191919',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  summaryCardValue: {
+    fontSize: 14.5,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: '#2F2F31',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  summaryCardText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#60646C',
+    textAlign: 'right',
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  summaryActionButton: {
+    backgroundColor: '#404040',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  summaryActionText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+});
 /* ---------------- PHOTO UPLOAD/GALLERY SUB-COMPONENT ---------------- */
 const PhotoGalleryView = () => {
   const [media, setMedia] = useState<any[]>([]);
@@ -1077,26 +1263,8 @@ useEffect(() => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <ScrollView style={styles.scrollView} nestedScrollEnabled>
-        <View style={embedded ? [styles.container, { padding: 0 }] : styles.container}>
-          
-
-   
-
-
-          <View style={[styles.syllabusContainertwo, embedded && { height: embeddedHeight }]}>
-            
-            <View
-              style={[
-                styles.gridContainer,
-                embedded
-                  ? { height: '100%', marginTop: 0, marginLeft: 0, overflow: 'hidden' }
-                  : { height: '45%', marginTop: '12%', marginLeft: 10 },
-              ]}
-            >
-              {studentData ? <CalendarView studentData={studentData} appStyles={appStyles} /> : <ActivityIndicator size="large" color="#000" />}
-            </View>
-            
-          </View>
+        <View style={embedded ? [styles.container, { padding: 0 }] : { padding: 0 }}>
+          {studentData ? <CalendarView studentData={studentData} appStyles={appStyles} /> : <ActivityIndicator size="large" color="#000" />}
         </View>
       </ScrollView>
     </SafeAreaView>

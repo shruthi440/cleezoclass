@@ -32,7 +32,65 @@ interface Student {
   class_teacher?: string;
   gender?: string;
   school_name?: string;
+  photo?: string;
 }
+
+const API_BASE = 'http://162.215.210.38:3010';
+const STUDENT_UPLOAD_BASE = 'https://cleezoclass.com:4000/CRM/public/uploads';
+
+const decodeBase64Text = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const atobFn = (globalThis as any).atob;
+    if (typeof atobFn === 'function') return atobFn(raw);
+  } catch {}
+  try {
+    const bufferCtor = (globalThis as any).Buffer;
+    if (bufferCtor?.from) return bufferCtor.from(raw, 'base64').toString('utf8');
+  } catch {}
+  return '';
+};
+
+const resolvePhotoUri = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const buildUploadUrl = (path: string) => {
+    const cleanPath = String(path || '').trim().replace(/^\/+/, '');
+    if (!cleanPath) return STUDENT_UPLOAD_BASE;
+
+    const relativePath = cleanPath
+      .replace(/^CRM\/public\/uploads\/?/i, '')
+      .replace(/^uploads\/?/i, '')
+      .replace(/^\/+/, '');
+
+    return `${STUDENT_UPLOAD_BASE}/${relativePath}`;
+  };
+
+  if (raw.startsWith('data:image')) {
+    const base64Part = raw.split(',')[1] || '';
+    const decoded = decodeBase64Text(base64Part);
+    const decodedPath = String(decoded || '').trim();
+    if (decodedPath.includes('CRM/public/uploads') || decodedPath.startsWith('/uploads/') || decodedPath.startsWith('uploads/')) {
+      return buildUploadUrl(decodedPath);
+    }
+    if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) return decodedPath;
+    return raw;
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  if (raw.includes('CRM/public/uploads') || raw.startsWith('/uploads/') || raw.startsWith('uploads/')) {
+    return buildUploadUrl(raw);
+  }
+  if (raw.startsWith('L3VwbG9hZHMv') || raw.startsWith('dXBsb2Fkcy8')) {
+    const decodedPath = String(decodeBase64Text(raw) || '').trim();
+    if (decodedPath.includes('CRM/public/uploads') || decodedPath.startsWith('/uploads/') || decodedPath.startsWith('uploads/')) {
+      return buildUploadUrl(decodedPath);
+    }
+    if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) return decodedPath;
+  }
+  return raw;
+};
 
 interface ApiResponse<T> {
   success: boolean;
@@ -92,7 +150,16 @@ useFocusEffect(
         return;
       }
 
-      const base = profileRes.data.student;
+      const base = {
+        ...profileRes.data.student,
+        photoUrl: resolvePhotoUri(profileRes.data.student.photoUrl || (profileRes.data.student as any).photo),
+      };
+
+      console.log('[ParentDetails] profile photo', {
+        photoUrl: (profileRes.data.student as any).photoUrl || null,
+        photo: (profileRes.data.student as any).photo || null,
+        resolvedPhotoUrl: base.photoUrl || null,
+      });
 
       // 2. Fetch all students associated with this parent
       const siblingsRes = await axios.post<ApiResponse<Student>>(
@@ -106,7 +173,13 @@ useFocusEffect(
       );
 
       if (siblingsRes.data.success && siblingsRes.data.siblings) {
-        setStudents(siblingsRes.data.siblings);
+        setStudents(
+          siblingsRes.data.siblings.map((item) => ({
+            ...item,
+            photoUrl: resolvePhotoUri(item.photoUrl || item.photo || base.photoUrl || ''),
+            photo: item.photo || base.photoUrl || '',
+          }))
+        );
       } else {
         showError('Notice', 'No students found for this account.');
       }
@@ -135,7 +208,8 @@ const selectStudent = async (student: any) => {
       ['name', student.name || ''],
       ['class_name', student.class_name || ''],
       ['section', student.section || ''],
-      ['photoUrl', student.photoUrl || ''],
+      ['photoUrl', resolvePhotoUri(student.photoUrl || student.photo)],
+      ['photo', String(student.photo || student.photoUrl || '')],
       ['aadhar_no', student.aadhar_no || ''],
       ['address', student.address || ''],
       ['class_teacher', student.class_teacher || ''],
@@ -188,13 +262,15 @@ const selectStudent = async (student: any) => {
       <Text style={styles.title}>Select a Student</Text>
 
       {students.map((student) => {
-        console.log('Student Photo URL:', student.photoUrl); // keep logging for debugging
-
-        // Check if photoUrl is valid (skip if it starts with '/uploads/')
-        const hasValidPhoto =
-          student.photoUrl &&
-          !student.photoUrl.startsWith('/uploads/') &&
-          !student.photoUrl.includes('base64');
+        const photoUri = resolvePhotoUri(student.photoUrl || student.photo);
+        const hasValidPhoto = Boolean(photoUri);
+        console.log('[ParentDetails] student photo', {
+          id: student.id,
+          name: student.name,
+          photoUrl: student.photoUrl || null,
+          photo: student.photo || null,
+          photoUri: photoUri || null,
+        });
 
         return (
           <TouchableOpacity
@@ -205,7 +281,18 @@ const selectStudent = async (student: any) => {
             <View style={styles.cardRow}>
               <View style={styles.photoWrapper}>
                 {hasValidPhoto ? (
-                  <Image source={{ uri: student.photoUrl }} style={styles.avatar} />
+                  <Image
+                    source={{ uri: encodeURI(photoUri) }}
+                    style={styles.avatar}
+                    onError={(event) => {
+                      console.log('[ParentDetails] image load failed', {
+                        id: student.id,
+                        name: student.name,
+                        uri: photoUri,
+                        error: event?.nativeEvent?.error || null,
+                      });
+                    }}
+                  />
                 ) : (
                   <Ionicons name="person-circle-outline" size={84} color="#D1D1D1" />
                 )}

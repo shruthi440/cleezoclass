@@ -11,8 +11,10 @@ import {
   View,
   ScrollView,
   SafeAreaView,
+  Image,
   TouchableOpacity,
   Dimensions,
+  Platform,
   NativeSyntheticEvent,
   NativeScrollEvent,
   ActivityIndicator,
@@ -24,9 +26,15 @@ import {
   TextInput,
   Pressable,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import LinearGradient from 'react-native-linear-gradient';
-import Svg, { Polyline, Line } from 'react-native-svg';
+import { Picker } from '@react-native-picker/picker';
+import Svg, {
+  Circle,
+  Path,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+} from 'react-native-svg';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -49,6 +57,8 @@ import {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scaleFont = (size: number) => (SCREEN_WIDTH / 375) * size;
 const FIXED_CARD_WIDTH = SCREEN_WIDTH * 0.92;
+const backArrowImage = require('../assets/Arrow.png');
+const chiefGradientColors = ['#F4ECFF', '#DDCBFF', '#C6B0FF'];
 
 const COLORS = {
   primary: '#f0f0f0',
@@ -66,6 +76,495 @@ type BranchFeeSummary = {
   totalDiscount: number;
   totalPaid: number;
   balance: number;
+};
+
+type DynamicFeeType = {
+  id?: number | string;
+  feeName?: string;
+  feesType?: string;
+  scope?: string;
+  frequency?: string;
+  installments?: number;
+  columnBase?: string;
+};
+
+type DynamicFeeSummary = {
+  key: string;
+  label: string;
+  amount: number;
+  count: number;
+};
+
+const normalizeFeeKey = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const formatFeeLabel = (key: string) =>
+  String(key || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\bFees\b/g, 'Fee')
+    .trim();
+
+const formatMoneyWithDecimals = (value: number) =>
+  `₹${Number(value || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const getNumericValueFromRow = (row: Record<string, any>, keys: string[]) => {
+  const lookup = new Map(
+    Object.entries(row || {}).map(([key, value]) => [normalizeFeeKey(key), value] as const),
+  );
+
+  for (const key of keys) {
+    const variants = buildFeeKeyVariants(key);
+
+    for (const variant of variants) {
+      if (!lookup.has(variant)) continue;
+      const value = lookup.get(variant);
+      const numeric = toNumber(value);
+      if (numeric || value === 0) return numeric;
+    }
+
+    for (const [candidateKey, candidateValue] of lookup.entries()) {
+      if (
+        variants.some(
+          (variant) =>
+            candidateKey === variant ||
+            candidateKey.includes(variant) ||
+            variant.includes(candidateKey),
+        )
+      ) {
+        const numeric = toNumber(candidateValue);
+        if (numeric || candidateValue === 0) return numeric;
+      }
+    }
+  }
+
+  return 0;
+};
+
+const buildFeeKeyVariants = (value: string) => {
+  const normalized = normalizeFeeKey(value);
+  const variants = new Set<string>();
+  if (!normalized) return [];
+
+  variants.add(normalized);
+  variants.add(normalized.replace(/_fee(s)?$/, ''));
+  variants.add(normalized.replace(/_amount$/, ''));
+
+  if (normalized.endsWith('s')) {
+    variants.add(normalized.slice(0, -1));
+  } else {
+    variants.add(`${normalized}s`);
+  }
+
+  if (normalized.endsWith('ies')) {
+    variants.add(normalized.replace(/ies$/, 'y'));
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const PIE_PALETTE = [
+  ['#E4D8FF', '#B58BFF'],
+  ['#B58BFF', '#7C3AED'],
+  ['#7C3AED', '#4C1D95'],
+  ['#4C1D95', '#1E3A8A'],
+  ['#1E3A8A', '#B58BFF'],
+  ['#E4D8FF', '#7C3AED'],
+  ['#B58BFF', '#4C1D95'],
+  ['#7C3AED', '#1E3A8A'],
+] as [string, string][];
+
+const PIE_CARD_GRADIENT = ['#F4EFEB', '#D1C7F9', '#C3BDFB'];
+
+const PIE_INNER_GRADIENT = ['rgba(244, 239, 235, 0.82)', 'rgba(211, 199, 249, 0.56)', 'rgba(195, 189, 251, 0.26)'];
+
+const PIE_CENTER_SHADOW = '#EDE6FF';
+
+const PIE_OUTLINE = 'rgba(255,255,255,0.95)';
+
+const MONTH_LABELS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const MONTH_OPTIONS = (() => {
+  const options: { label: string; value: string }[] = [];
+  for (let year = 2025; year <= 2030; year += 1) {
+    MONTH_LABELS.forEach((monthLabel, monthIndex) => {
+      const value = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+      options.push({ label: `${monthLabel} ${year}`, value });
+    });
+  }
+  return options;
+})();
+
+const getMonthKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+
+const extractRowDate = (row: Record<string, any>) => {
+  const rawValue = row?.record_date || row?.payment_date || row?.created_at || row?.updated_at || row?.date;
+  if (!rawValue) return null;
+  const parsed = new Date(rawValue);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const isSameMonth = (left: Date, right: Date) =>
+  left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+
+const toNumber = (value: any) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const extractArrayFromApiPayload = (payload: any): any[] => {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+
+  const candidateKeys = [
+    'data',
+    'fees',
+    'rows',
+    'records',
+    'result',
+    'results',
+    'items',
+    'list',
+    'feeTypes',
+    'fee_types',
+    'feeTypesList',
+  ];
+
+  for (const key of candidateKeys) {
+    if (Array.isArray(payload[key])) return payload[key];
+  }
+
+  const nestedObjects = [
+    payload?.data,
+    payload?.result,
+    payload?.results,
+    payload?.payload,
+  ].filter(Boolean);
+
+  for (const nested of nestedObjects) {
+    const found = extractArrayFromApiPayload(nested);
+    if (found.length) return found;
+  }
+
+  const visited = new WeakSet<object>();
+  const candidateArrays: any[][] = [];
+  const collectArrays = (value: any) => {
+    if (!value || typeof value !== 'object') return;
+    if (visited.has(value)) return;
+    visited.add(value);
+
+    if (Array.isArray(value)) {
+      candidateArrays.push(value);
+      return;
+    }
+
+    Object.values(value).forEach(child => collectArrays(child));
+  };
+
+  collectArrays(payload);
+
+  if (candidateArrays.length) {
+    const scored = candidateArrays
+      .map(arr => {
+        const sample = arr.find(item => item && typeof item === 'object') || {};
+        const keys = Object.keys(sample).map(key => key.toLowerCase());
+        const keySet = new Set(keys);
+        const score =
+          (keySet.has('fee_type') || keySet.has('feetype') ? 12 : 0) +
+          (keySet.has('bill_type') || keySet.has('billtype') ? 12 : 0) +
+          (keySet.has('dynamicfeebreakdown') ? 10 : 0) +
+          (keySet.has('individualfeeassignments') ? 10 : 0) +
+          (keySet.has('dynamicfeetotals') ? 10 : 0) +
+          (keySet.has('feebreakdown') ? 10 : 0) +
+          (keySet.has('total_expected') ? 5 : 0) +
+          (keySet.has('total_paid') ? 5 : 0) +
+          (keySet.has('paid_amount') ? 4 : 0) +
+          (keySet.has('due_amount') ? 4 : 0) +
+          (keySet.has('remaining_amount') ? 4 : 0) +
+          (keys.some(key => key.includes('fee')) ? 4 : 0) +
+          (keys.some(key => key.includes('amount')) ? 3 : 0) +
+          (keys.some(key => key.includes('paid')) ? 2 : 0) +
+          (keys.some(key => key.includes('due')) ? 2 : 0) +
+          (keys.some(key => key.includes('discount')) ? 2 : 0) +
+          (keys.some(key => key.includes('student')) ? 1 : 0) +
+          (keys.some(key => key.includes('class')) ? 1 : 0) +
+          (keys.some(key => key.includes('section')) ? 1 : 0) +
+          Math.min(arr.length, 5);
+        return { arr, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    if (scored[0]?.arr?.length) return scored[0].arr;
+  }
+
+  return [];
+};
+
+const pickFirstNonEmpty = (...values: any[]) => {
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const ROW_METADATA_KEYS = new Set([
+  'id',
+  'student_id',
+  'studentid',
+  'student_name',
+  'studentname',
+  'name',
+  'class_name',
+  'classname',
+  'section',
+  'section_name',
+  'father_name',
+  'mobile_no',
+  'phone_no',
+  'admission_no',
+  'admission_number',
+  'reg_no',
+  'roll_no',
+  'receipt_no',
+  'receipt_number',
+  'gender',
+  'email',
+  'record_date',
+  'payment_date',
+  'created_at',
+  'updated_at',
+  'discount',
+  'discount_amount',
+  'total_amount',
+  'total_due',
+  'due_amount',
+  'unpaid_amount',
+  'completefee',
+  'complete_fee',
+  'updatedcompletefee',
+  'updatedcomplete_fee',
+  'totalfee',
+  'total_fee',
+  'total_expected',
+  'fee_expected',
+  'paid_amount',
+  'total_paid',
+  'paidamount',
+  'remaining_amount',
+]);
+
+const extractDynamicFeeEntries = (row: Record<string, any>) => {
+  const entries: Array<{ key: string; label: string; amount: number }> = [];
+  const pushEntry = (entry: Record<string, any>) => {
+    const rawLabel = String(
+      entry?.label || entry?.key || entry?.type || entry?.feeName || entry?.columnBase || '',
+    ).trim();
+    const key = normalizeFeeKey(entry?.key || entry?.label || entry?.type || entry?.feeName || entry?.columnBase || rawLabel);
+    if (!key) return;
+
+    const amount = toNumber(
+      entry?.total ??
+        entry?.amount ??
+        entry?.amountTotal ??
+        entry?.assignedAmount ??
+        entry?.paidAmount ??
+        entry?.paid_amount ??
+        entry?.amount_paid ??
+        entry?.totalPaid ??
+        entry?.completeFee ??
+        entry?.totalAmount ??
+        entry?.finalAmount ??
+        entry?.Final_Amount ??
+        entry?.expectedAmount ??
+        entry?.expected_amount ??
+        entry?.value ??
+        0,
+    );
+    if (amount <= 0) return;
+
+    entries.push({
+      key,
+      label: formatFeeLabel(rawLabel || key),
+      amount,
+    });
+  };
+
+  pushEntry({
+    key:
+      row?.fee_type ??
+      row?.feeType ??
+      row?.bill_type ??
+      row?.billType ??
+      row?.type ??
+      row?.feeName ??
+      row?.label ??
+      '',
+    label:
+      row?.fee_type ??
+      row?.feeType ??
+      row?.bill_type ??
+      row?.billType ??
+      row?.type ??
+      row?.feeName ??
+      row?.label ??
+      '',
+    amount:
+      row?.amount ??
+      row?.total_amount ??
+      row?.totalAmount ??
+      row?.Total_Expected ??
+      row?.Total_Paid ??
+      row?.CompleteFee ??
+      row?.Final_Amount ??
+      0,
+  });
+
+  if (Array.isArray(row?.dynamicFeeBreakdown)) {
+    row.dynamicFeeBreakdown.forEach((entry: Record<string, any>) => pushEntry(entry));
+  } else if (
+    row?.dynamicFeeBreakdown &&
+    typeof row.dynamicFeeBreakdown === 'object'
+  ) {
+    Object.entries(row.dynamicFeeBreakdown).forEach(([key, amount]) =>
+      pushEntry({ key, label: key, amount }),
+    );
+  }
+  if (Array.isArray(row?.individualFeeAssignments)) {
+    row.individualFeeAssignments.forEach((entry: Record<string, any>) => pushEntry(entry));
+  } else if (
+    row?.individualFeeAssignments &&
+    typeof row.individualFeeAssignments === 'object'
+  ) {
+    Object.entries(row.individualFeeAssignments).forEach(([key, amount]) =>
+      pushEntry({ key, label: key, amount }),
+    );
+  }
+  if (Array.isArray(row?.feeBreakdown)) {
+    row.feeBreakdown.forEach((entry: Record<string, any>) => {
+      if (Array.isArray(entry)) {
+        const [label, amount] = entry;
+        pushEntry({ key: label, label, amount });
+      } else {
+        pushEntry(entry);
+      }
+    });
+  } else if (row?.feeBreakdown && typeof row.feeBreakdown === 'object') {
+    Object.entries(row.feeBreakdown).forEach(([key, amount]) =>
+      pushEntry({ key, label: key, amount }),
+    );
+  }
+
+  const totals = row?.dynamicFeeTotals;
+  if (totals && typeof totals === 'object' && !Array.isArray(totals)) {
+    Object.entries(totals).forEach(([key, amount]) => {
+      const normalized = normalizeFeeKey(key);
+      const numeric = toNumber(amount);
+      if (!normalized || numeric <= 0) return;
+      entries.push({
+        key: normalized,
+        label: formatFeeLabel(key),
+        amount: numeric,
+      });
+    });
+  }
+
+  return entries;
+};
+
+const extractNumericFeeColumns = (row: Record<string, any>) => {
+  const entries: Array<{ key: string; label: string; amount: number }> = [];
+  Object.entries(row || {}).forEach(([rawKey, rawValue]) => {
+    const normalizedKey = normalizeFeeKey(rawKey);
+    if (!normalizedKey || ROW_METADATA_KEYS.has(normalizedKey)) return;
+    if (normalizedKey.startsWith('total_') || normalizedKey.startsWith('dynamicfee')) return;
+    if (
+      normalizedKey.endsWith('_paid') ||
+      normalizedKey.endsWith('_due') ||
+      normalizedKey.endsWith('_discount') ||
+      normalizedKey.endsWith('_amount') ||
+      normalizedKey.endsWith('_total') ||
+      normalizedKey === 'amount' ||
+      normalizedKey === 'paid' ||
+      normalizedKey === 'due' ||
+      normalizedKey === 'discount'
+    ) {
+      return;
+    }
+
+    const amount = toNumber(rawValue);
+    if (amount <= 0) return;
+
+    entries.push({
+      key: normalizedKey,
+      label: formatFeeLabel(rawKey),
+      amount,
+    });
+  });
+
+  return entries;
+};
+
+const findMatchingAmountInRow = (row: Record<string, any>, keys: string[]) => {
+  const normalizedEntries = Object.entries(row || {}).map(([key, value]) => [
+    normalizeFeeKey(key),
+    value,
+  ] as const);
+  const lookup = new Map<string, any>(normalizedEntries);
+
+  for (const key of keys) {
+    const variants = buildFeeKeyVariants(key);
+    for (const variant of variants) {
+      if (!lookup.has(variant)) continue;
+      const numeric = toNumber(lookup.get(variant));
+      if (numeric || lookup.get(variant) === 0) return numeric;
+    }
+
+    for (const [candidateKey, candidateValue] of lookup.entries()) {
+      if (
+        variants.some(
+          (variant) =>
+            candidateKey === variant ||
+            candidateKey.includes(variant) ||
+            variant.includes(candidateKey),
+        )
+      ) {
+        const numeric = toNumber(candidateValue);
+        if (numeric || candidateValue === 0) return numeric;
+      }
+    }
+  }
+
+  return 0;
 };
 
 type ChiefProfile = {
@@ -146,44 +645,14 @@ const HorizontalScrollWithScrollbar1: React.FC<{
   title?: string;
   children: React.ReactNode;
 }> = ({ title, children }) => {
-  const scrollRef = useRef<ScrollView>(null);
-  const [scrollX, setScrollX] = useState(0);
-  const [contentWidth, setContentWidth] = useState(1);
-  const [layoutWidth, setLayoutWidth] = useState(SCREEN_WIDTH - 40);
   const ITEM_WIDTH = SCREEN_WIDTH * 0.85 + 10;
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) =>
-    setScrollX(e.nativeEvent.contentOffset.x);
-
-  const trackWidth = layoutWidth - 60;
-  const thumbWidth =
-    contentWidth > layoutWidth
-      ? (layoutWidth / contentWidth) * trackWidth
-      : trackWidth;
-  const maxTranslate = trackWidth - thumbWidth;
-  const translateX =
-    contentWidth > layoutWidth
-      ? (scrollX / (contentWidth - layoutWidth)) * maxTranslate
-      : 0;
-
-  const scrollBy = (direction: 'prev' | 'next') => {
-    const currentIndex = Math.round(scrollX / ITEM_WIDTH);
-    const nextIndex =
-      direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-    scrollRef.current?.scrollTo({ x: nextIndex * ITEM_WIDTH, animated: true });
-  };
 
   return (
     <View style={styles.hContainer}>
       {title && <Text style={styles.hTitle}>{title}</Text>}
       <ScrollView
-        ref={scrollRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        onContentSizeChange={w => setContentWidth(w)}
-        onLayout={e => setLayoutWidth(e.nativeEvent.layout.width)}
         snapToInterval={ITEM_WIDTH}
         decelerationRate="fast"
         snapToAlignment="start"
@@ -191,22 +660,6 @@ const HorizontalScrollWithScrollbar1: React.FC<{
       >
         <View style={styles.hRow}>{children}</View>
       </ScrollView>
-      <View style={styles.scrollWrapper}>
-        <TouchableOpacity onPress={() => scrollBy('prev')}>
-          <Ionicons name="chevron-back" size={14} color="#000" />
-        </TouchableOpacity>
-        <View style={styles.scrollTrack}>
-          <View
-            style={[
-              styles.scrollThumb,
-              { width: thumbWidth, transform: [{ translateX }] },
-            ]}
-          />
-        </View>
-        <TouchableOpacity onPress={() => scrollBy('next')}>
-          <Ionicons name="chevron-forward" size={14} color="#000" />
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -215,8 +668,9 @@ const HorizontalScrollWithScrollbar1: React.FC<{
 const ChiefDashboard: React.FC<Props> = ({ route }) => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { name } = route.params;
+  const name = route.params?.name || '';
   const scrollRef = useRef<ScrollView | null>(null);
+  const scrollYRef = useRef(0);
   const sectionOffsets = useRef<Partial<Record<ChiefSectionKey, number>>>({});
   const { width, height } = Dimensions.get('window');
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
@@ -242,23 +696,36 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
     'Overview' | 'Finance' | 'Actions'
   >('Overview');
 
-  const [fromDate, setFromDate] = useState(
+  const [selectedMonth, setSelectedMonth] = useState(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
-  const [toDate, setToDate] = useState(new Date());
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
 
   const [chartData, setChartData] = useState<any[]>([]);
   const [finalPaid, setFinalPaid] = useState(0);
   const [finalUnpaid, setFinalUnpaid] = useState(0);
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState({
+    gross: 0,
+    concession: 0,
+    netPayable: 0,
+    totalPaid: 0,
+    totalDue: 0,
     totalAmount: 0,
     totalDiscount: 0,
-    totalPaid: 0,
     balance: 0,
   });
+  const [dynamicFeeTypes, setDynamicFeeTypes] = useState<DynamicFeeType[]>(
+    [],
+  );
+  const [dynamicFeeSummaries, setDynamicFeeSummaries] = useState<
+    DynamicFeeSummary[]
+  >([]);
+  const [dynamicFeesLoading, setDynamicFeesLoading] = useState(false);
+  const [activePieSlice, setActivePieSlice] = useState<{
+    label: string;
+    amount: number;
+  } | null>(null);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [discountStudents, setDiscountStudents] = useState<any[]>([]);
   const [discountLoading, setDiscountLoading] = useState(false);
@@ -284,6 +751,15 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
   const dashboardIsFocused = useIsFocused();
 
   useEffect(() => {
+    setShowFooterNav(true);
+  }, []);
+
+  useEffect(() => {
+    console.log('🟩 [ChiefDashboard] mount started', {
+      routeName: 'ChiefDashboard',
+      routeParams: route.params,
+    });
+
     const loadChiefProfile = async () => {
       try {
         const storedUserDetailsRaw = await AsyncStorage.getItem('userDetails');
@@ -329,12 +805,36 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
             storedUserDetails.email_id || storedUserDetails.email || '',
           ),
         });
+
+        console.log('🟩 [ChiefDashboard] chief profile loaded', {
+          username:
+            storedUserDetails.username ||
+            storedUserDetails.user_name ||
+            storedUsername ||
+            route.params?.username ||
+            '',
+          name:
+            storedUserDetails.name ||
+            storedUserDetails.teacher_name ||
+            storedName ||
+            route.params?.name ||
+            '',
+          schoolCode: String(
+            storedUserDetails.schoolCode || storedSchoolCode || '',
+          ),
+          userType: String(storedUserDetails.userType || storedUserType || ''),
+        });
       } catch (error) {
         console.error('Failed to load chief profile:', error);
       }
     };
 
-    loadChiefProfile();
+    loadChiefProfile().finally(() => {
+      console.log('🟩 [ChiefDashboard] chief profile mount complete');
+    });
+    return () => {
+      console.log('🟥 [ChiefDashboard] unmounted');
+    };
   }, [route.params]);
 
   const routineData = [
@@ -368,24 +868,28 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
       label: 'Academic Students',
       title: 'Academic \nStudents',
       icon: 'school',
+      gradientColors: ['#EEE8FF', '#C7B8FF'],
       sectionKey: 'AcademicStudent' as ChiefSectionKey,
     },
     {
       label: 'Academic Staff',
       title: 'Academic \nStaff',
       icon: 'groups',
+      gradientColors: ['#EEE8FF', '#C7B8FF'],
       sectionKey: 'AcademicTeacher' as ChiefSectionKey,
     },
     {
       label: 'Exam Management',
       title: 'Exam \nManagement',
       icon: 'assignment',
+      gradientColors: ['#EEE8FF', '#C7B8FF'],
       sectionKey: 'ExamManagement' as ChiefSectionKey,
     },
     {
       label: 'Meetings',
       title: 'Meetings',
       icon: 'chat',
+      gradientColors: ['#EEE8FF', '#C7B8FF'],
       sectionKey: 'Meetings' as ChiefSectionKey,
     },
   ];
@@ -503,19 +1007,46 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
       const schoolCode = await AsyncStorage.getItem('schoolCode');
       if (!schoolCode) return;
 
+      console.log('🟦 [ChiefDashboard] fees summary API request', {
+        schoolCode,
+        year: 'All',
+        className: 'All',
+        section: 'All',
+      });
+
       const response = await axios.get(
         'https://cleezoclass.com:4000/api/fees-summary-ledgerData',
-        { params: { schoolCode } },
+        { params: { schoolCode, year: 'All', className: 'All', section: 'All' } },
       );
 
-      if (response.data.success) {
-        setSummary({
-          totalAmount: Number(response.data.totalAmount) || 0,
-          totalDiscount: Number(response.data.totalDiscount) || 0,
-          totalPaid: Number(response.data.totalPaid) || 0,
-          balance: Number(response.data.balance) || 0,
-        });
-      }
+      const payload = response?.data?.data || response?.data || {};
+      const gross = Number(payload.gross ?? payload.totalAmount ?? 0) || 0;
+      const concession =
+        Number(payload.concession ?? payload.totalDiscount ?? 0) || 0;
+      const totalPaid = Number(payload.totalPaid ?? payload.paid ?? 0) || 0;
+      const netPayable =
+        Number(payload.netPayable ?? payload.net_payable ?? 0) ||
+        Math.max(gross - concession, 0);
+      const totalDue =
+        Number(payload.totalDue ?? payload.balance ?? 0) ||
+        Math.max(netPayable - totalPaid, 0);
+
+      console.log('🟦 [ChiefDashboard] fees summary API response', {
+        rawPayload: payload,
+        totalAmount: gross,
+        totalDue,
+      });
+
+      setSummary({
+        gross,
+        concession,
+        netPayable,
+        totalPaid,
+        totalDue,
+        totalAmount: gross,
+        totalDiscount: concession,
+        balance: totalDue,
+      });
     } catch (error) {
       console.error('Error fetching summary:', error);
     } finally {
@@ -525,35 +1056,99 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
 
   // ------------------- Fetch Fee Records -------------------
   const fetchFeeData = useCallback(async () => {
-    const fromStr = fromDate.toISOString().split('T')[0];
-    const toStr = toDate.toISOString().split('T')[0];
+    const monthStart = new Date(
+      selectedMonth.getFullYear(),
+      selectedMonth.getMonth(),
+      1,
+    );
+    const monthEnd = new Date(
+      selectedMonth.getFullYear(),
+      selectedMonth.getMonth() + 1,
+      0,
+    );
+    const fromStr = monthStart.toISOString().split('T')[0];
+    const toStr = monthEnd.toISOString().split('T')[0];
 
     try {
       setLoading(true);
       const schoolCode =
-        (await AsyncStorage.getItem('schoolCode')) || 'CLEEZOCLASS';
+        currentDbName ||
+        chiefProfile.schoolCode ||
+        (await AsyncStorage.getItem('schoolCode')) ||
+        'CLEEZOCLASS';
+
+      console.log('🟦 [ChiefDashboard] fee api context resolved', {
+        schoolCode,
+        currentDbName,
+        chiefSchoolCode: chiefProfile.schoolCode,
+        selectedMonth: selectedMonth.toLocaleDateString('en-US', {
+          month: 'long',
+          year: 'numeric',
+        }),
+        fromDate: fromStr,
+        toDate: toStr,
+      });
+
       const url = `https://cleezoclass.com:4000/api/fee-records?type=AllFeesStatusReport&fromDate=${fromStr}&toDate=${toStr}&schoolCode=${schoolCode}`;
-      const response = await axios.get(url);
-      const fees = response.data || [];
+      console.log('🟦 [ChiefDashboard] Commerce pie API request', {
+        schoolCode,
+        fromDate: fromStr,
+        toDate: toStr,
+        url,
+      });
+
+      const [feeRecordsRes, feeTypesRes] = await Promise.allSettled([
+        axios.get(url),
+        axios.get('https://cleezoclass.com:4000/api/fee-types', {
+          params: { schoolCode, _t: Date.now() },
+        }),
+      ]);
+
+      const fees =
+        feeRecordsRes.status === 'fulfilled'
+          ? extractArrayFromApiPayload(feeRecordsRes.value.data)
+          : [];
+      const monthFilteredFees = fees.filter((item: any) => {
+        const rowDate = extractRowDate(item);
+        if (!rowDate) return true;
+        return isSameMonth(rowDate, selectedMonth);
+      });
+      console.log('🟦 [ChiefDashboard] Commerce pie API response', {
+        status: feeRecordsRes.status === 'fulfilled' ? feeRecordsRes.value.status : 'rejected',
+        isArray: Array.isArray(fees),
+        rowCount: Array.isArray(fees) ? fees.length : 0,
+        filteredRowCount: monthFilteredFees.length,
+        sample: Array.isArray(fees) ? fees.slice(0, 3) : fees,
+      });
 
       let paidTotal = 0;
       let unpaidTotal = 0;
       const grouped: Record<string, any> = {};
 
-      fees.forEach((item: any) => {
-        const paid = parseFloat(item.Total_Paid || 0);
-        const expected = parseFloat(item.Total_Expected || 0);
+      monthFilteredFees.forEach((item: any) => {
+        const paid = getNumericValueFromRow(item, [
+          'Total_Paid',
+          'total_paid',
+          'paid_amount',
+          'paidAmount',
+          'paid',
+        ]);
+        const expected = getNumericValueFromRow(item, [
+          'Total_Expected',
+          'total_expected',
+          'expected_amount',
+          'expectedAmount',
+          'amount',
+          'totalAmount',
+        ]);
         paidTotal += paid;
         const pending = Math.max(expected - paid, 0);
         unpaidTotal += pending;
 
-        const dateValue =
-          item.record_date && item.record_date !== 'NaN'
-            ? item.record_date
-            : null;
-        if (!dateValue) return;
+        const rowDate = extractRowDate(item);
+        if (!rowDate) return;
 
-        const dateLabel = new Date(dateValue).toLocaleDateString('en-US', {
+        const dateLabel = rowDate.toLocaleDateString('en-US', {
           day: 'numeric',
           month: 'short',
         });
@@ -563,15 +1158,212 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
         grouped[dateLabel].Pending += pending;
       });
 
-      setChartData(Object.values(grouped));
+      const groupedChartData = Object.values(grouped);
+      console.log('🟦 [ChiefDashboard] Commerce pie grouped data', groupedChartData);
+      console.log('🟦 [ChiefDashboard] Commerce pie totals', {
+        paidTotal,
+        unpaidTotal,
+      });
+
+      setChartData(groupedChartData);
       setFinalPaid(paidTotal);
       setFinalUnpaid(unpaidTotal);
+
+      const rawFeeTypes =
+        feeTypesRes.status === 'fulfilled'
+          ? extractArrayFromApiPayload(feeTypesRes.value.data)
+          : [];
+      const normalizedFeeTypes: DynamicFeeType[] = rawFeeTypes
+        .filter(
+          (item: Record<string, any>) =>
+            pickFirstNonEmpty(
+              item?.feeName,
+              item?.feesType,
+              item?.fee_type,
+              item?.feeType,
+              item?.bill_type,
+              item?.billType,
+              item?.name,
+              item?.label,
+              item?.type,
+            ) !== '',
+        )
+        .map((item: Record<string, any>) => ({
+          id: item?.id,
+          feeName: pickFirstNonEmpty(
+            item?.feeName,
+            item?.fee_type,
+            item?.feeType,
+            item?.bill_type,
+            item?.billType,
+            item?.name,
+            item?.label,
+            item?.type,
+          ),
+          feesType: pickFirstNonEmpty(
+            item?.feesType,
+            item?.fee_category,
+            item?.category,
+            item?.type,
+            item?.label,
+            'Custom Fee',
+          ),
+          scope: pickFirstNonEmpty(item?.scope, 'All'),
+          frequency: pickFirstNonEmpty(item?.frequency, 'One time'),
+          installments: Number(item?.installments || item?.installment || 1) || 1,
+          columnBase: normalizeFeeKey(
+            item?.columnBase ||
+              item?.column_base ||
+              item?.feeName ||
+              item?.fee_type ||
+              item?.feeType ||
+              item?.bill_type ||
+              item?.billType ||
+              item?.feesType ||
+              item?.name ||
+              item?.label ||
+              item?.type ||
+              '',
+          ),
+        }));
+
+      if (!normalizedFeeTypes.length && Array.isArray(fees)) {
+        const feeTypeSeed = new Map<string, DynamicFeeType>();
+        fees.forEach((row: Record<string, any>) => {
+          extractDynamicFeeEntries(row).forEach(entry => {
+            const key = normalizeFeeKey(entry.key || entry.label);
+            if (!key || feeTypeSeed.has(key)) return;
+            feeTypeSeed.set(key, {
+              id: key,
+              feeName: entry.label || formatFeeLabel(key),
+              feesType: entry.label || formatFeeLabel(key),
+              scope: 'All',
+              frequency: 'One time',
+              installments: 1,
+              columnBase: key,
+            });
+          });
+        });
+        normalizedFeeTypes.push(...Array.from(feeTypeSeed.values()));
+      }
+
+      const summaryMap = new Map<
+        string,
+        { key: string; label: string; amount: number; count: number; order: number }
+      >();
+      let usedFallbackColumns = false;
+
+      normalizedFeeTypes.forEach((item, index) => {
+        const rawLabel = String(
+          item?.feeName || item?.feesType || item?.columnBase || '',
+        ).trim();
+        const key = normalizeFeeKey(item?.columnBase || rawLabel);
+        if (!key) return;
+
+        summaryMap.set(key, {
+          key,
+          label: formatFeeLabel(rawLabel || key),
+          amount: 0,
+          count: 0,
+          order: index,
+        });
+      });
+
+      (Array.isArray(fees) ? fees : []).forEach((row: any) => {
+        const dynamicEntries = extractDynamicFeeEntries(row);
+        normalizedFeeTypes.forEach((item, index) => {
+          const rawLabel = String(
+            item?.feeName || item?.feesType || item?.columnBase || '',
+          ).trim();
+          const key = normalizeFeeKey(item?.columnBase || rawLabel);
+          if (!key) return;
+
+          const amount = findMatchingAmountInRow(row, [
+            key,
+            rawLabel,
+            `${key}_amount`,
+            `${key}_fee`,
+            `${key}_fees`,
+            `${rawLabel}_amount`,
+            `${rawLabel}_fee`,
+            `${rawLabel}_fees`,
+          ]);
+
+          if (amount <= 0) return;
+
+          const current = summaryMap.get(key);
+          if (!current) return;
+          current.amount += amount;
+          current.count += 1;
+        });
+
+        // Fallback: if the row carries nested fee breakdown structures, use them too.
+        dynamicEntries.forEach((entry) => {
+          const key = normalizeFeeKey(entry.key || entry.label);
+          const amount = toNumber(entry.amount);
+          if (!key || amount <= 0) return;
+
+          if (!summaryMap.has(key)) {
+            summaryMap.set(key, {
+              key,
+              label: entry.label || formatFeeLabel(key),
+              amount: 0,
+              count: 0,
+              order: summaryMap.size,
+            });
+          }
+
+          const current = summaryMap.get(key);
+          if (!current) return;
+          current.amount += amount;
+          current.count += 1;
+        });
+
+        if (!dynamicEntries.length) {
+          extractNumericFeeColumns(row).forEach((entry) => {
+            const key = normalizeFeeKey(entry.key || entry.label);
+            const amount = toNumber(entry.amount);
+            if (!key || amount <= 0) return;
+            usedFallbackColumns = true;
+
+            if (!summaryMap.has(key)) {
+              summaryMap.set(key, {
+                key,
+                label: entry.label || formatFeeLabel(key),
+                amount: 0,
+                count: 0,
+                order: summaryMap.size,
+              });
+            }
+
+            const current = summaryMap.get(key);
+            if (!current) return;
+            current.amount += amount;
+            current.count += 1;
+          });
+        }
+      });
+
+      const dynamicRows = Array.from(summaryMap.values()).sort((a, b) => {
+        if (a.order !== b.order) return a.order - b.order;
+        return b.amount - a.amount;
+      });
+
+      console.log('🟦 [ChiefDashboard] fee api parsing complete', {
+        feeTypeCount: normalizedFeeTypes.length,
+        dynamicRowCount: dynamicRows.length,
+        usedFallbackColumns,
+        dynamicRows: dynamicRows.slice(0, 10),
+      });
+
+      setDynamicFeeTypes(normalizedFeeTypes);
+      setDynamicFeeSummaries(dynamicRows.map(({ order, ...rest }) => rest));
     } catch (err) {
       console.error('Fee fetch error:', err);
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate]);
+  }, [chiefProfile.schoolCode, currentDbName, selectedMonth]);
 
   useEffect(() => {
     fetchFeeData();
@@ -880,14 +1672,8 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
     }
   };
 
-  const scrollToSection = (key: ChiefSectionKey) => {
-    const offset = sectionOffsets.current[key];
-    if (typeof offset === 'number' && scrollRef.current) {
-      scrollRef.current.scrollTo({
-        y: Math.max(0, offset - 12),
-        animated: true,
-      });
-    }
+  const openChiefModule = (sectionKey: ChiefSectionKey) => {
+    navigation.navigate(sectionKey);
   };
 
   const formatDate = (dateStr: string) => {
@@ -901,6 +1687,29 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
 
   const handleOpenProfilePanel = () => {
     setShowProfileModal(true);
+  };
+
+  const handleGoBack = () => {
+    const currentY = scrollYRef.current;
+    const offsets = [0, ...Object.values(sectionOffsets.current)]
+      .filter((value): value is number => typeof value === 'number')
+      .sort((a, b) => a - b);
+
+    const previousOffset = offsets.filter(offset => offset < currentY - 8).pop();
+
+    if (typeof previousOffset === 'number') {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, previousOffset - 12),
+        animated: true,
+      });
+      if (previousOffset <= 12) {
+        setSelectedChip('Overview');
+      }
+      return;
+    }
+
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    setSelectedChip('Overview');
   };
 
   const handleChiefLogout = async () => {
@@ -931,18 +1740,63 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
   };
 
   // ------------------- Chart Calculations -------------------
-  const CHART_HEIGHT = 150;
-  const CHART_WIDTH = SCREEN_WIDTH - 120;
-  const maxVal =
-    chartData.length > 0
-      ? Math.max(...chartData.map(d => Math.max(d.Paid, d.Pending)), 1000)
-      : 1000;
-  const getY = (val: number) =>
-    CHART_HEIGHT - 30 - (val / maxVal) * (CHART_HEIGHT - 40);
-  const spacing =
-    chartData.length > 1
-      ? (CHART_WIDTH - 20) / (chartData.length - 1)
-      : CHART_WIDTH / 2;
+  const dynamicPieDataRaw = dynamicFeeSummaries
+    .map((item, index) => ({
+      label: item.label,
+      value: item.amount,
+      displayAmount: item.amount,
+      color: PIE_PALETTE[index % PIE_PALETTE.length][1],
+      gradientStart: PIE_PALETTE[index % PIE_PALETTE.length][0],
+      gradientEnd: PIE_PALETTE[index % PIE_PALETTE.length][1],
+    }));
+  const pieTotal = dynamicPieDataRaw.reduce((sum, item) => sum + item.value, 0);
+  const pieHasPositiveAmounts = dynamicPieDataRaw.some(item => item.value > 0);
+  const pieData =
+    pieHasPositiveAmounts || dynamicPieDataRaw.length === 0
+      ? dynamicPieDataRaw.filter(item => item.value > 0)
+      : dynamicPieDataRaw.map(item => ({
+          ...item,
+          value: 1,
+          displayAmount: item.value,
+        }));
+  const PIE_SIZE = 314;
+  const PIE_RADIUS = 124;
+  const PIE_CENTER = PIE_SIZE / 2;
+  const pieSlices = (() => {
+    if (!pieData.length) return [];
+    let startAngle = -90;
+    const chartTotal = pieData.reduce((sum, item) => sum + item.value, 0) || 1;
+
+    return pieData.map(item => {
+      const sweep = (item.value / chartTotal) * 360;
+      const endAngle = startAngle + sweep;
+      const largeArcFlag = sweep > 180 ? 1 : 0;
+
+      const start = {
+        x: PIE_CENTER + PIE_RADIUS * Math.cos((Math.PI * startAngle) / 180),
+        y: PIE_CENTER + PIE_RADIUS * Math.sin((Math.PI * startAngle) / 180),
+      };
+      const end = {
+        x: PIE_CENTER + PIE_RADIUS * Math.cos((Math.PI * endAngle) / 180),
+        y: PIE_CENTER + PIE_RADIUS * Math.sin((Math.PI * endAngle) / 180),
+      };
+
+      const path = [
+        `M ${PIE_CENTER} ${PIE_CENTER}`,
+        `L ${start.x} ${start.y}`,
+        `A ${PIE_RADIUS} ${PIE_RADIUS} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`,
+        'Z',
+      ].join(' ');
+
+      const slice = {
+        ...item,
+        path,
+        displayAmount: item.displayAmount ?? item.value,
+      };
+      startAngle = endAngle;
+      return slice;
+    });
+  })();
 
   // ------------------- Metric Badge -------------------
   const MetricBadge: React.FC<{ label: string; value: string }> = ({
@@ -969,13 +1823,14 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
           ref={scrollRef}
           contentContainerStyle={{ padding: 15, paddingBottom: 140 }}
           onScroll={event => {
+            scrollYRef.current = event.nativeEvent.contentOffset.y;
             if (event.nativeEvent.contentOffset.y > 8) {
               setShowFooterNav(true);
             }
           }}
           scrollEventThrottle={16}
         >
-          <View style={styles.headerRow}>
+          <View style={styles.headerRow1}>
             <Text style={styles.headerText}>Welcome, {name}</Text>
           </View>
           {/* Header Row */}
@@ -1043,7 +1898,7 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
             </View>
           </View>
 
-          <View style={appStyles.chipStickyHeader}>
+          {/* <View style={appStyles.chipStickyHeader}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={appStyles.chipRow}>
                 {(['Overview', 'Finance', 'Actions'] as const).map(chip => {
@@ -1073,125 +1928,252 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                 })}
               </View>
             </ScrollView>
-          </View>
+          </View> */}
 
        
 
          
 
-          {/* Commerce Chart Section */}
-          <View style={styles.dateSideColumn}>
-            <TouchableOpacity
-              onPress={() => setShowFromPicker(true)}
-              style={styles.miniDateBtn}
-            >
-              <Text style={styles.miniValue}>
-                {fromDate.toLocaleDateString()}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setShowToPicker(true)}
-              style={styles.miniDateBtn}
-            >
-              <Text style={styles.miniValue}>
-                {toDate.toLocaleDateString()}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {showFromPicker && (
-            <DateTimePicker
-              value={fromDate}
-              mode="date"
-              onChange={(e, d) => {
-                setShowFromPicker(false);
-                if (d) setFromDate(d);
-              }}
-            />
-          )}
-          {showToPicker && (
-            <DateTimePicker
-              value={toDate}
-              mode="date"
-              onChange={(e, d) => {
-                setShowToPicker(false);
-                if (d) setToDate(d);
-              }}
-            />
-          )}
+          <Modal
+            transparent
+            visible={showMonthPicker}
+            animationType="fade"
+            onRequestClose={() => setShowMonthPicker(false)}
+          >
+            <View style={styles.monthPickerOverlay}>
+              <View style={styles.monthPickerSheet}>
+                <Text style={styles.monthPickerTitle}>Select Month</Text>
+                <View style={styles.monthPickerFrame}>
+                  <Picker
+                    selectedValue={getMonthKey(selectedMonth)}
+                    onValueChange={(itemValue: string) => {
+                      const [year, month] = itemValue.split('-').map(Number);
+                      if (!year || !month) return;
+                      setSelectedMonth(new Date(year, month - 1, 1));
+                    }}
+                    style={styles.monthPicker}
+                  >
+                    {MONTH_OPTIONS.map(option => (
+                      <Picker.Item
+                        key={option.value}
+                        label={option.label}
+                        value={option.value}
+                      />
+                    ))}
+                  </Picker>
+                </View>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => setShowMonthPicker(false)}
+                  style={styles.monthPickerDoneBtn}
+                >
+                  <Text style={styles.monthPickerDoneText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
-          <HorizontalScrollWithScrollbar1 title="Commerce">
+          <HorizontalScrollWithScrollbar1 title="">
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={async () => {
                 setShowSummary(true);
                 await fetchAllBranchSummaries();
               }}
-              style={[styles.sectionCard, styles.chartContainer]}
+              style={[
+                styles.sectionCard,
+                styles.chartContainer,
+                styles.pieChartNoShadow,
+              ]}
             >
-              {loading ? (
-                <ActivityIndicator color={COLORS.brandBlue} />
-              ) : (
-                <View style={{ flexDirection: 'row' }}>
-                  <View style={styles.yAxis}>
-                    {[1, 0.75, 0.5, 0.25, 0].map((p, i) => (
-                      <Text key={i} style={styles.axisText}>
-                        ₹{Math.round(maxVal * p)}
-                      </Text>
-                    ))}
-                  </View>
-                  <View>
-                    <Svg height={CHART_HEIGHT} width={CHART_WIDTH}>
-                      {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-                        <Line
-                          key={i}
-                          x1="0"
-                          y1={getY(maxVal * p)}
-                          x2={CHART_WIDTH}
-                          y2={getY(maxVal * p)}
-                          stroke={COLORS.gridLine}
-                          strokeWidth="1"
-                        />
-                      ))}
-                      <Polyline
-                        points={chartData
-                          .map((d, i) => `${i * spacing},${getY(d.Paid)}`)
-                          .join(' ')}
-                        fill="none"
-                        stroke={COLORS.brandBlue}
-                        strokeWidth="2.5"
-                      />
-                      <Polyline
-                        points={chartData
-                          .map((d, i) => `${i * spacing},${getY(d.Pending)}`)
-                          .join(' ')}
-                        fill="none"
-                        stroke={COLORS.brandRed}
-                        strokeWidth="2.5"
-                      />
-                    </Svg>
-                    <View style={styles.xAxis}>
-                      {chartData.map(
-                        (d, i) =>
-                          (i % Math.ceil(chartData.length / 4) === 0 ||
-                            i === chartData.length - 1) && (
-                            <Text
-                              key={i}
-                              style={[
-                                styles.axisText,
-                                {
-                                  position: 'absolute',
-                                  left: i * spacing - 10,
-                                },
-                              ]}
-                            >
-                              {d.label}
-                            </Text>
-                          ),
+              <LinearGradient
+                colors={PIE_CARD_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                locations={[0, 0.58, 1]}
+                style={styles.pieCardGradient}
+              >
+                <LinearGradient
+                  colors={[
+                    'rgba(244,239,235,0.16)',
+                    'rgba(209,199,249,0.10)',
+                    'rgba(195,189,251,0.06)',
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  locations={[0, 0.55, 1]}
+                  style={styles.pieCardTopGlow}
+                />
+                <LinearGradient
+                  colors={[
+                    'rgba(124,58,237,0.08)',
+                    'rgba(255,255,255,0)',
+                    'rgba(30,58,138,0.05)',
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  locations={[0, 0.56, 1]}
+                  style={styles.pieCardSoftShadow}
+                />
+                <LinearGradient
+                  colors={PIE_INNER_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  locations={[0, 0.55, 1]}
+                  style={styles.pieCardInnerGlow}
+                />
+                <View style={styles.pieCardHeader}>
+                  <View style={styles.pieCardHeaderLeft}>
+                    <Text style={styles.pieCardHeaderLabel}>
+                      Total Amount
+                    </Text>
+                    <Text style={styles.pieCardHeaderValue}>
+                      {formatMoneyWithDecimals(
+                        finalPaid + finalUnpaid,
                       )}
-                    </View>
+                    </Text>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => setShowMonthPicker(true)}
+                    activeOpacity={0.85}
+                    style={styles.pieCardHeaderBadge}
+                  >
+                    <Text style={styles.pieCardHeaderBadgeText}>
+                      {selectedMonth.toLocaleDateString('en-US', {
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              )}
+                {loading ? (
+                  <ActivityIndicator color={COLORS.brandBlue} />
+                ) : pieData.length > 0 ? (
+                  <View style={styles.pieChartWrap}>
+                    <Svg height={PIE_SIZE} width={PIE_SIZE}>
+                      <Defs>
+                        {pieSlices.map((slice, index) => (
+                          <SvgLinearGradient
+                            key={`${slice.label}-gradient`}
+                            id={`pie-gradient-${index}`}
+                            x1="6%"
+                            y1="6%"
+                            x2="94%"
+                            y2="94%"
+                          >
+                            <Stop
+                              offset="0%"
+                              stopColor={slice.gradientStart}
+                              stopOpacity="1"
+                            />
+                            <Stop
+                              offset="100%"
+                              stopColor={slice.gradientEnd}
+                              stopOpacity="1"
+                            />
+                          </SvgLinearGradient>
+                        ))}
+                      </Defs>
+                    <Circle
+                      cx={PIE_CENTER}
+                      cy={PIE_CENTER}
+                      r={PIE_RADIUS}
+                      fill="url(#pie-gradient-0)"
+                      opacity={0.14}
+                    />
+                      {pieSlices.length === 1 ? (
+                        <Circle
+                          cx={PIE_CENTER}
+                          cy={PIE_CENTER}
+                          r={PIE_RADIUS}
+                          fill="url(#pie-gradient-0)"
+                          stroke={PIE_OUTLINE}
+                          strokeWidth="2.5"
+                        />
+                      ) : (
+                        pieSlices.map((slice, index) => {
+                          const isActive =
+                            activePieSlice?.label === slice.label;
+                          const sliceHandlers: any = {
+                            onPress: () =>
+                              setActivePieSlice(prev =>
+                                prev?.label === slice.label
+                                  ? null
+                                  : {
+                                      label: slice.label,
+                                      amount:
+                                        slice.displayAmount ?? slice.value,
+                                    },
+                              ),
+                          };
+
+                          if (Platform.OS === 'web') {
+                            sliceHandlers.onMouseEnter = () =>
+                              setActivePieSlice({
+                                label: slice.label,
+                                amount: slice.displayAmount ?? slice.value,
+                              });
+                            sliceHandlers.onMouseLeave = () =>
+                              setActivePieSlice(null);
+                          }
+
+                          return (
+                            <Path
+                              key={slice.label}
+                              d={slice.path}
+                              fill={`url(#pie-gradient-${index})`}
+                              stroke={PIE_OUTLINE}
+                              strokeWidth={isActive ? 3.5 : 2.25}
+                              opacity={isActive ? 1 : 0.92}
+                              {...sliceHandlers}
+                            />
+                          );
+                        })
+                      )}
+                    <Circle
+                      cx={PIE_CENTER}
+                      cy={PIE_CENTER}
+                      r={68}
+                      fill={PIE_CENTER_SHADOW}
+                    />
+                    </Svg>
+                  <View style={styles.pieCenterLabel}>
+                    <Text style={styles.pieCenterDueValue}>
+                      {formatMoneyWithDecimals(
+                        finalUnpaid,
+                      )}
+                    </Text>
+                    <Text style={styles.pieCenterDueLabel}>Due</Text>
+                    {activePieSlice ? (
+                      <>
+                        <Text style={styles.pieCenterSliceLabel}>
+                          {activePieSlice.label}
+                        </Text>
+                        <Text style={styles.pieCenterSliceValue}>
+                          {formatMoneyWithDecimals(
+                            Number(activePieSlice.amount || 0),
+                          )}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.pieCenterSliceLabel}>
+                        {pieHasPositiveAmounts ? '' : 'No Amounts Yet'}
+                      </Text>
+                    )}
+                  </View>
+                  </View>
+                ) : (
+                  <View style={styles.pieEmptyState}>
+                    <Text style={styles.pieEmptyTitle}>
+                      No dynamic fee data
+                    </Text>
+                    <Text style={styles.pieEmptyText}>
+                      The chart is based on saved fee types and amounts from the
+                      accountant screen.
+                    </Text>
+                  </View>
+                )}
+              </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1204,171 +2186,264 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
             >
               <View style={styles.financeGrid}>
                 <View style={[styles.financeColumn, { gap: 8 }]}>
-                  <Text style={styles.subHeading}>INCOME</Text>
+                  <Text style={styles.subHeading}>FINANCE SUMMARY</Text>
                   <MetricBadge
-                    label="Fees Paid Report"
-                    value={`₹${finalPaid.toLocaleString()}`}
+                    label="Gross"
+                    value={formatMoneyWithDecimals(summary.gross)}
                   />
                   <MetricBadge
-                    label="Fees Unpaid Report"
-                    value={`₹${finalUnpaid.toLocaleString()}`}
+                    label="Concession"
+                    value={formatMoneyWithDecimals(summary.concession)}
                   />
                   <MetricBadge
-                    label="Income Ledger"
-                    value={`₹${(finalPaid + finalUnpaid).toLocaleString()}`}
+                    label="Net Payable"
+                    value={formatMoneyWithDecimals(summary.netPayable)}
                   />
                   <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Total Income</Text>
+                    <Text style={styles.totalLabel}>Total Paid</Text>
                     <Text
                       style={[styles.totalValue, { color: COLORS.brandBlue }]}
                     >
-                      ₹{(finalPaid + finalUnpaid).toLocaleString()}
+                      {formatMoneyWithDecimals(summary.totalPaid)}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.divider} />
                 <View style={[styles.financeColumn, { gap: 8 }]}>
-                  <Text style={styles.subHeading}>EXPENSE</Text>
-                  <MetricBadge label="Income Expense" value="₹1,000" />
-                  <MetricBadge label="Pending Expense" value="N/A" />
-                  <MetricBadge label="Expense Ledger" value="N/A" />
+                  <Text style={styles.subHeading}>DYNAMIC FEES</Text>
+                  {dynamicFeesLoading ? (
+                    <ActivityIndicator color={COLORS.brandRed} />
+                  ) : dynamicFeeSummaries.slice(0, 4).length > 0 ? (
+                    dynamicFeeSummaries.slice(0, 4).map((item) => (
+                      <MetricBadge
+                        key={item.key}
+                        label={`${item.label}${item.count > 1 ? ` (${item.count})` : ''}`}
+                        value={`₹${item.amount.toLocaleString('en-IN')}`}
+                      />
+                    ))
+                  ) : (
+                    <MetricBadge label="Dynamic Fees" value="No data" />
+                  )}
+                  <MetricBadge
+                    label="Dynamic Fee Total"
+                    value={`₹${dynamicFeeSummaries
+                      .reduce((sum, item) => sum + item.amount, 0)
+                      .toLocaleString('en-IN')}`}
+                  />
                   <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Total Expense</Text>
+                    <Text style={styles.totalLabel}>Dynamic Types</Text>
                     <Text
                       style={[styles.totalValue, { color: COLORS.brandRed }]}
                     >
-                      ₹1,000
+                      {dynamicFeeTypes.length}
                     </Text>
                   </View>
                 </View>
               </View>
             </TouchableOpacity>
           </HorizontalScrollWithScrollbar1>
- <View style={styles.chiefSummaryRow}>
-            <View style={styles.chiefSummaryCard}>
-              <Text style={styles.chiefSummaryLabel}>Paid</Text>
-              <Text
-                style={[styles.chiefSummaryValue, { color: COLORS.brandBlue }]}
-              >
-                ₹{summary.totalPaid.toLocaleString('en-IN')}
+          <HorizontalScrollWithScrollbar1 title="Actions">
+            <LinearGradient
+              colors={chiefGradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.actionCard, styles.actionGradientCard]}
+            >
+              <View style={styles.actionHeaderRow}>
+                <View style={styles.actionIconWrap}>
+                  <MaterialIcons name="event-busy" size={20} color="#242424" />
+                </View>
+                <View style={styles.actionHeaderTextBlock}>
+                  <Text style={styles.actionCardTitle}>Leave Approval</Text>
+                  <Text style={styles.actionSubText}>
+                    {leaves.length > 0
+                      ? `${leaves[0].teacher_name || 'Unknown'} needs review`
+                      : 'No pending leave approvals'}
+                  </Text>
+                </View>
+              </View>
+              {leaves.length > 0 && (
+                <>
+                  <Text style={styles.actionBodyText} numberOfLines={2}>
+                    {leaves[0].reason || 'No reason provided'}
+                  </Text>
+                  <View style={styles.actionMetaRow}>
+                    <View style={styles.actionMetaPill}>
+                      <Text style={styles.actionMetaPillText}>
+                        {formatDate(leaves[0].leave_start_date)}
+                      </Text>
+                    </View>
+                    <View style={styles.compactBtnRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.approveBtn,
+                          styles.actionApproveYes,
+                        ]}
+                        onPress={() =>
+                          updateLeaveStatus(leaves[0].id, 'approved')
+                        }
+                      >
+                        <Text style={styles.approveText}>OK</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.approveBtn,
+                          styles.actionApproveNo,
+                        ]}
+                        onPress={() =>
+                          updateLeaveStatus(leaves[0].id, 'rejected')
+                        }
+                      >
+                        <Text style={styles.approveText}>NO</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
+            </LinearGradient>
+
+            <LinearGradient
+              colors={chiefGradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.actionCard, styles.actionGradientCard]}
+            >
+              <View style={styles.actionHeaderRow}>
+                <View style={styles.actionIconWrap}>
+                  <MaterialIcons name="schedule" size={20} color="#242424" />
+                </View>
+                <View style={styles.actionHeaderTextBlock}>
+                  <Text style={styles.actionCardTitle}>Late Comers</Text>
+                  <Text style={styles.actionSubText}>
+                    {latecomers.length} record{latecomers.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.actionBodyText} numberOfLines={2}>
+                Top: {latecomers.length > 0 ? latecomers[0]?.teacher_name || '-' : 'No latecomers found'}
               </Text>
-            </View>
-            <View style={styles.chiefSummaryCard}>
-              <Text style={styles.chiefSummaryLabel}>Balance</Text>
-              <Text
-                style={[styles.chiefSummaryValue, { color: COLORS.brandRed }]}
+              <View style={styles.actionMetaRow}>
+                <View style={styles.actionMetaPillMuted}>
+                  <Text style={styles.actionMetaPillText}>
+                    {latecomers.length > 0 ? 'Trending' : 'Idle'}
+                  </Text>
+                </View>
+              </View>
+            </LinearGradient>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={async () => {
+                setShowDiscountModal(true);
+                await fetchDiscountStudents();
+              }}
+            >
+              <LinearGradient
+                colors={chiefGradientColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.actionCard, styles.actionGradientCard]}
               >
-                ₹{summary.balance.toLocaleString('en-IN')}
+                <View style={styles.actionHeaderRow}>
+                  <View style={styles.actionIconWrap}>
+                    <MaterialIcons name="local-offer" size={20} color="#242424" />
+                  </View>
+                  <View style={styles.actionHeaderTextBlock}>
+                    <Text style={styles.actionCardTitle}>Discount Provided</Text>
+                    <Text style={styles.actionSubText}>
+                      Tap to open the list
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.actionBodyText} numberOfLines={2}>
+                  Total: ₹{discountTotalFromApi.toLocaleString('en-IN')}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <LinearGradient
+              colors={chiefGradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.actionCard, styles.actionGradientCard]}
+            >
+              <View style={styles.actionHeaderRow}>
+                <View style={styles.actionIconWrap}>
+                  <MaterialIcons name="groups" size={20} color="#242424" />
+                </View>
+                <View style={styles.actionHeaderTextBlock}>
+                  <Text style={styles.actionCardTitle}>Substitute Required</Text>
+                  <Text style={styles.actionSubText}>
+                    Teachers needing coverage
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.actionBodyText} numberOfLines={2}>
+                Absent: {absentTeachers.length}
               </Text>
-            </View>
-            <View style={styles.chiefSummaryCard}>
-              <Text style={styles.chiefSummaryLabel}>Requests</Text>
-              <Text style={styles.chiefSummaryValue}>{leaves.length}</Text>
-            </View>
-          </View>
-          <View style={appStyles.dashboardGrid}>
-            {chiefTiles.map(item => (
-              <Pressable
-                key={item.title}
-                style={appStyles.dashboardGridCard}
-                onPress={() => scrollToSection(item.sectionKey)}
-              >
-                <View style={appStyles.gridIconWrap}>
-                  <MaterialIcons
-                    name={item.icon as any}
-                    size={24}
-                    color="#3F3F40"
-                  />
-                </View>
-                <Text style={appStyles.gridLabel}>{item.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View
-            onLayout={event => {
-              sectionOffsets.current.AcademicStudent =
-                event.nativeEvent.layout.y;
-            }}
-          >
-            <View style={appStyles.moduleHeaderCard}>
-              <View style={appStyles.moduleHeaderTopRow}>
-                <View style={appStyles.moduleHeaderTextBlock}>
-                  <Text style={appStyles.moduleHeaderTitle}>
-                    Academic Students
-                  </Text>
-                  <Text style={appStyles.moduleHeaderSubtitle}>
-                    Student performance, attendance and reports.
+              <View style={styles.actionMetaRow}>
+                <View style={styles.actionMetaPill}>
+                  <Text style={styles.actionMetaPillText}>
+                    {absentTeachers.length > 0 ? 'Needs action' : 'All clear'}
                   </Text>
                 </View>
-                
+                {absentTeachers.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.approveBtn, styles.actionAssignBtn]}
+                    onPress={() => {
+                      console.log(
+                        '🟪 [ChiefDashboard] Assign clicked, absentTeachers:',
+                        absentTeachers,
+                      );
+                      setShowSubstituteModal(true);
+                    }}
+                  >
+                    <Text style={styles.approveText}>Assign</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </View>
-            <AcademicStudent />
-          </View>
+            </LinearGradient>
+          </HorizontalScrollWithScrollbar1>
 
-          <View
-            onLayout={event => {
-              sectionOffsets.current.AcademicTeacher =
-                event.nativeEvent.layout.y;
+     
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingRight: 12,
+              paddingBottom: 4,
             }}
+            style={{ marginBottom: 10 }}
           >
-            <View style={appStyles.moduleHeaderCard}>
-              <View style={appStyles.moduleHeaderTopRow}>
-                <View style={appStyles.moduleHeaderTextBlock}>
-                  <Text style={appStyles.moduleHeaderTitle}>
-                    Academic Staff
-                  </Text>
-                  <Text style={appStyles.moduleHeaderSubtitle}>
-                    Teacher academic overview and classroom performance.
-                  </Text>
-                </View>
-                
-              </View>
+            <View style={[appStyles.dashboardGrid, { flexWrap: 'nowrap' }]}>
+              {chiefTiles.map(item => (
+                <Pressable
+                  key={item.title}
+                  onPress={() => openChiefModule(item.sectionKey)}
+                >
+                  <LinearGradient
+                    colors={item.gradientColors}
+                    start={{ x: 0.02, y: 0.02 }}
+                    end={{ x: 0.98, y: 0.92 }}
+                    style={[
+                      appStyles.dashboardGridCardThree,
+                      styles.chiefGradientCard,
+                      { marginRight: 10, marginBottom: 0 },
+                    ]}
+                  >
+                    <View style={styles.chiefGradientIconWrap}>
+                      <MaterialIcons
+                        name={item.icon as any}
+                        size={24}
+                        color="#242424"
+                      />
+                    </View>
+                    <Text style={styles.chiefGradientLabel}>{item.label}</Text>
+                  </LinearGradient>
+                </Pressable>
+              ))}
             </View>
-            <AcademicTeacher />
-          </View>
-
-          <View
-            onLayout={event => {
-              sectionOffsets.current.ExamManagement =
-                event.nativeEvent.layout.y;
-            }}
-          >
-            <View style={appStyles.moduleHeaderCard}>
-              <View style={appStyles.moduleHeaderTopRow}>
-                <View style={appStyles.moduleHeaderTextBlock}>
-                  <Text style={appStyles.moduleHeaderTitle}>
-                    Exam Management
-                  </Text>
-                  <Text style={appStyles.moduleHeaderSubtitle}>
-                    Question papers, invigilation and exam workflow.
-                  </Text>
-                </View>
-              
-              </View>
-            </View>
-            <ExamManagement />
-          </View>
-
-          <View
-            onLayout={event => {
-              sectionOffsets.current.Meetings = event.nativeEvent.layout.y;
-            }}
-          >
-            <View style={appStyles.moduleHeaderCard}>
-              <View style={appStyles.moduleHeaderTopRow}>
-                <View style={appStyles.moduleHeaderTextBlock}>
-                  <Text style={appStyles.moduleHeaderTitle}>Meetings</Text>
-                  <Text style={appStyles.moduleHeaderSubtitle}>
-                    Meeting schedules, chats and school events.
-                  </Text>
-                </View>
-               
-              </View>
-            </View>
-            <Meetings />
-          </View>
+          </ScrollView>
 
           {/* Modal */}
           <Modal
@@ -1502,126 +2577,6 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
             </View>
           </View>
         </View> */}
-          <HorizontalScrollWithScrollbar1 title="Actions">
-            <ImageBackground
-              source={require('../assets/action.jpeg')}
-              style={styles.actionCard}
-              imageStyle={styles.actionImage}
-            >
-              <Text style={[styles.actionCardTitle, { color: '#fff' }]}>
-                Leave Approval
-              </Text>
-              {leaves.length > 0 ? (
-                <>
-                  <Text style={styles.actionText} numberOfLines={1}>
-                    {leaves[0].teacher_name || 'Unknown'} |{' '}
-                    {leaves[0].reason || 'No reason'}
-                  </Text>
-                  <View style={styles.compactRow}>
-                    <Text style={styles.actionSubTextLight} numberOfLines={1}>
-                      {formatDate(leaves[0].leave_start_date)}
-                    </Text>
-                    <View style={styles.compactBtnRow}>
-                      <TouchableOpacity
-                        style={[
-                          styles.approveBtn,
-                          { backgroundColor: '#4CAF50' },
-                        ]}
-                        onPress={() =>
-                          updateLeaveStatus(leaves[0].id, 'approved')
-                        }
-                      >
-                        <Text style={styles.approveText}>OK</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.approveBtn,
-                          { backgroundColor: '#F44336' },
-                        ]}
-                        onPress={() =>
-                          updateLeaveStatus(leaves[0].id, 'rejected')
-                        }
-                      >
-                        <Text style={styles.approveText}>NO</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </>
-              ) : (
-                <Text style={styles.actionText} numberOfLines={1}>
-                  No pending leave approvals
-                </Text>
-              )}
-            </ImageBackground>
-
-            <ImageBackground
-              source={require('../assets/action.jpeg')}
-              style={styles.actionCard}
-              imageStyle={styles.actionImage}
-            >
-              <Text style={[styles.actionCardTitle, { color: '#fff' }]}>
-                Late Comers Info
-              </Text>
-              <Text style={styles.actionText} numberOfLines={1}>
-                Month: {latecomers.length} | Top:{' '}
-                {latecomers.length > 0
-                  ? latecomers[0]?.teacher_name || '-'
-                  : 'No latecomers found'}
-              </Text>
-            </ImageBackground>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={async () => {
-                setShowDiscountModal(true);
-                await fetchDiscountStudents();
-              }}
-            >
-              <ImageBackground
-                source={require('../assets/action.jpeg')}
-                style={styles.actionCard}
-                imageStyle={styles.actionImage}
-              >
-                <Text style={[styles.actionCardTitle, { color: '#fff' }]}>
-                  Discount Provided
-                </Text>
-                <Text style={styles.actionText} numberOfLines={1}>
-                  Total: ₹{discountTotalFromApi.toLocaleString('en-IN')} | Tap
-                  for list
-                </Text>
-              </ImageBackground>
-            </TouchableOpacity>
-
-            <ImageBackground
-              source={require('../assets/action.jpeg')}
-              style={styles.actionCard}
-              imageStyle={styles.actionImage}
-            >
-              <Text style={[styles.actionCardTitle, { color: '#fff' }]}>
-                Substitute Required
-              </Text>
-              <View style={styles.compactRow}>
-                <Text style={styles.actionText} numberOfLines={1}>
-                  Absent: {absentTeachers.length}
-                </Text>
-                {absentTeachers.length > 0 && (
-                  <TouchableOpacity
-                    style={[styles.approveBtn, { backgroundColor: '#404040' }]}
-                    onPress={() => {
-                      console.log(
-                        '🟪 [ChiefDashboard] Assign clicked, absentTeachers:',
-                        absentTeachers,
-                      );
-                      setShowSubstituteModal(true);
-                    }}
-                  >
-                    <Text style={styles.approveText}>Assign</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </ImageBackground>
-          </HorizontalScrollWithScrollbar1>
-
           <Modal
             visible={showDiscountModal}
             transparent
@@ -1772,7 +2727,7 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
               </View>
             </View>
           </Modal>
-
+    
           <Modal
             visible={showProfileModal}
             transparent
@@ -1805,11 +2760,7 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                       label: 'Designation',
                       value: chiefProfile.designation || '-',
                     },
-                    {
-                      label: 'School Code',
-                      value: chiefProfile.schoolCode || '-',
-                    },
-                    { label: 'User Type', value: chiefProfile.userType || '-' },
+                    
                     { label: 'Phone', value: chiefProfile.phoneNo || '-' },
                     { label: 'Email', value: chiefProfile.email || '-' },
                   ].map(item => (
@@ -1832,24 +2783,29 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
         </ScrollView>
 
         {showFooterNav && (
-          <View style={[appStyles.footer, styles.fixedFooter]}>
-            <View style={appStyles.footerNav}>
+          <LinearGradient
+            colors={['#FFFFFF', '#FBFBFD', '#F4F1FF']}
+            start={{ x: 0.08, y: 0.05 }}
+            end={{ x: 0.95, y: 1 }}
+            style={[appStyles.footer, styles.fixedFooter, styles.curvedFooter]}
+          >
+            <View style={[appStyles.footerNav, styles.footerDockRow]}>
               <Pressable
-                style={appStyles.footerNavItem}
-                onPress={() => navigation.goBack()}
+                style={[appStyles.footerNavItem, styles.footerNavItemLeft]}
+                onPress={handleGoBack}
               >
-                <Ionicons name="arrow-back" size={18} color="#111" />
+                <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
                 <Text style={appStyles.footerNavLabel}>Back</Text>
               </Pressable>
               <Pressable
-                style={appStyles.footerNavItem}
+                style={[appStyles.footerNavItem, styles.footerNavItemLeft]}
                 onPress={() => setSelectedChip('Overview')}
               >
                 <Ionicons name="home" size={18} color="#111" />
                 <Text style={appStyles.footerNavLabel}>Home</Text>
               </Pressable>
               <Pressable
-                style={appStyles.footerAddButton}
+                style={styles.footerAddButtonFloating}
                 onPress={() => setShowSummary(true)}
               >
                 <Text
@@ -1864,14 +2820,14 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                 </Text>
               </Pressable>
               <Pressable
-                style={appStyles.footerNavItem}
+                style={[appStyles.footerNavItem, styles.footerNavItemRight]}
                 onPress={() => setSelectedChip('Actions')}
               >
                 <Ionicons name="chatbubble-outline" size={18} color="#B0B0B5" />
                 <Text style={appStyles.footerNavLabelMuted}>Chat</Text>
               </Pressable>
               <Pressable
-                style={appStyles.footerNavItem}
+                style={[appStyles.footerNavItem, styles.footerNavItemRight]}
                 onPress={handleOpenProfilePanel}
               >
                 <Ionicons name="person-outline" size={18} color="#B0B0B5" />
@@ -1886,8 +2842,7 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                 resizeMode="contain"
               />
             </View>
-            <View style={appStyles.homeIndicator} />
-          </View>
+          </LinearGradient>
         )}
       </View>
     </SafeAreaView>
@@ -1895,31 +2850,62 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  headerRow1: { flexDirection: 'row', justifyContent: 'space-between', marginTop:'40' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop:'5' },
   title: { fontSize: 26, fontWeight: 'bold', color: '#333' },
   subTitle: { fontSize: 14, color: '#666' },
-  dateSideColumn: {
-    flexDirection: 'row', // side by side
-    justifyContent: 'flex-end', // 👈 push to right
-    gap: 8,
-    width: '100%',
-    // important so it can move right
-  },
   sectionHeader: {
     color: '#000',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  miniDateBtn: {
-    backgroundColor: '#404040',
-    color: '#fff',
-    padding: 6,
-    borderRadius: 6,
-    width: 110,
-    elevation: 2,
+  monthPickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
-  miniLabel: { fontSize: 8, color: '#fff', fontWeight: 'bold' },
-  miniValue: { fontSize: 11, color: '#fff', fontWeight: 'bold' },
+  monthPickerSheet: {
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+  monthPickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#18181B',
+    marginBottom: 12,
+  },
+  monthPickerFrame: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F8FAFC',
+  },
+  monthPicker: {
+    width: '100%',
+    height: 220,
+    color: '#000',
+  },
+  monthPickerDoneBtn: {
+    marginTop: 16,
+    alignSelf: 'flex-end',
+    backgroundColor: '#4B3CE2',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  monthPickerDoneText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   mainGraphCard: {
     backgroundColor: COLORS.primary,
     borderRadius: 15,
@@ -1950,8 +2936,181 @@ const styles = StyleSheet.create({
   internalValue: { fontSize: 12, fontWeight: 'bold' },
   chartContainer: {
     width: FIXED_CARD_WIDTH,
-    height: 180,
+    height: 418,
+    marginTop: 20,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    overflow: 'hidden',
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+  },
+  pieChartNoShadow: {
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+  },
+  pieCardGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 18,
+    overflow: 'hidden',
+    shadowColor: '#B49BFF',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  pieCardTopGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    opacity: 0.9,
+  },
+  pieCardSoftShadow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 20,
+    opacity: 0.9,
+  },
+  pieCardInnerGlow: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.5,
+    borderRadius: 20,
+  },
+  pieChartWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: 6,
+  },
+  pieCardHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 6,
+    marginBottom: 8,
+    zIndex: 2,
+  },
+  pieCardHeaderLeft: {
+    flexShrink: 1,
+  },
+  pieCardHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7C7C88',
+    letterSpacing: 0.2,
+  },
+  pieCardHeaderValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#17171D',
+    marginTop: 2,
+  },
+  pieCardHeaderBadge: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    shadowColor: '#9E8BEA',
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  pieCardHeaderBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4A4A55',
+  },
+  pieCenterLabel: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pieCenterDueLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#70707A',
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
+  pieCenterDueValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#17171D',
+    letterSpacing: -0.5,
+    marginTop: 0,
+  },
+  pieCenterSliceLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#5E5E6A',
+    marginTop: 6,
+  },
+  pieCenterSliceValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#5E5E6A',
+    marginTop: 1,
+  },
+  pieLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 10,
+    flexWrap: 'wrap',
+  },
+  pieLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pieLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  pieLegendText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2A2A2A',
+  },
+  pieEmptyState: {
+    width: '100%',
+    minHeight: 190,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  pieEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#1A1A1A',
+    marginBottom: 6,
+  },
+  pieEmptyText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#66666D',
+    textAlign: 'center',
   },
   heroGraphCard: {
     width: '100%',
@@ -1964,6 +3123,54 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 20,
+  },
+  curvedFooter: {
+    alignSelf: 'center',
+    width: SCREEN_WIDTH - 16,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderTopWidth: 0,
+    borderRadius: 40,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+    overflow: 'visible',
+  },
+  footerDockRow: {
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    paddingTop: 2,
+    justifyContent: 'space-between',
+  },
+  footerNavItemLeft: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  footerNavItemRight: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  footerAddButtonFloating: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F14A40',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 6,
+    borderColor: '#FFF',
+    marginTop: -34,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 10,
   },
   yAxis: {
     height: 120,
@@ -1988,55 +3195,156 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  actionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  actionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F2F4F7',
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionHeaderTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
   actionText: { color: '#fff', fontSize: 10, fontWeight: '600', flex: 1 },
+  actionBodyText: {
+    color: '#202124',
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
   actionSubText: {
-    color: '#444',
+    color: '#5F6368',
     fontSize: 11,
-    marginTop: 6,
+    marginTop: 3,
     fontWeight: '600',
   },
   actionSubTextLight: { color: '#fff', fontSize: 9, marginTop: 1 },
+  chiefGradientCard: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  chiefGradientIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  chiefGradientLabel: {
+    color: '#191919',
+    fontSize: 13.5,
+    lineHeight: 16,
+    fontWeight: '800',
+    textAlign: 'left',
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    marginTop: 12,
+    paddingHorizontal: 0,
+    maxWidth: '100%',
+  },
   actionCard: {
     width: SCREEN_WIDTH * 0.88,
-    height: 60,
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    height: 132,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#000',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  actionGradientCard: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   actionCardTitle: {
-    color: '#222',
-    fontWeight: '700',
-    fontSize: 11,
-    marginBottom: 2,
+    color: '#111827',
+    fontWeight: '800',
+    fontSize: 14,
+    lineHeight: 18,
   },
   compactRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  compactBtnRow: { flexDirection: 'row', gap: 5, alignItems: 'center' },
+  compactBtnRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  actionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  actionMetaPill: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#f6f6f7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+  },
+  actionMetaPillMuted: {
+    backgroundColor: '#D7E7CD',
+    borderWidth: 1,
+    borderColor: '#A8C597',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignSelf: 'flex-start',
+  },
+  actionMetaPillText: {
+    color: '#202124',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  actionApproveYes: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#2E7D32',
+  },
+  actionApproveNo: {
+    backgroundColor: '#F44336',
+    borderColor: '#C62828',
+  },
+  actionAssignBtn: {
+    backgroundColor: '#404040',
+    borderColor: '#111111',
+  },
   approveBtn: {
     backgroundColor: '#404040',
-    paddingVertical: 2,
-    paddingHorizontal: 6,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#FF6B6B',
+    borderColor: '#111111',
   },
-  approveText: { color: '#fff', fontSize: 9, fontWeight: 'bold' },
-  scrollWrapper: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
-  scrollTrack: {
-    flex: 1,
-    height: 3,
-    backgroundColor: '#ddd',
-    borderRadius: 3,
-    marginHorizontal: 10,
-  },
-  scrollThumb: { height: 3, backgroundColor: '#000', borderRadius: 3 },
+  approveText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   smallCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -2074,7 +3382,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   plusText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
-  headerText: { fontSize: scaleFont(18), fontWeight: 'bold', color: '#000' },
+  headerText: { fontSize: scaleFont(16), fontWeight: 'bold', color: '#000' },
   footerWrapper: {
     position: 'absolute',
     bottom: -60, // ✅ 30px from bottom
@@ -2417,7 +3725,7 @@ const styles = StyleSheet.create({
     color: '#111',
   },
   leftContainer: { flexDirection: 'row', alignItems: 'center' },
-  schoolName: { fontSize: 18, fontWeight: 'bold', marginRight: 10 },
+  schoolName: { fontSize: 16, fontWeight: 'bold', marginRight: 10 },
   branchButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2455,11 +3763,12 @@ const styles = StyleSheet.create({
 
   branchButtonActive: {
     backgroundColor: 'transparent',
+    fontSize: 12,
   },
 
   branchTextActive: {
     color: '#000',
-    fontWeight: '700',
+    fontWeight: '300',
   },
   chiefSummaryRow: {
     flexDirection: 'row',

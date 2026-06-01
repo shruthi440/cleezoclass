@@ -15,7 +15,8 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 
 import { UserContext } from '../UserContext';
@@ -30,9 +31,11 @@ type RootStackParamList = {
   TeacherAdmissionDashboard: { username: string; name: string };
   ChiefDashboard: { username: string; name: string };
   AdminDashboard: undefined;
+  AccountantDashboard: { username: string; name: string };
   ParentDashboard: { username: string; name: string };
   ParentDetails: { username: string; name: string };
   TeacherDashboard: { username: string; name: string };
+  BusManagerDashboard: undefined;
 };
 
 const TeacherLogin: React.FC = () => {
@@ -45,7 +48,7 @@ const TeacherLogin: React.FC = () => {
   const { themeStyles } = useContext(ThemeContext);
 const { showError } = useContext(ErrorContext);
 
-  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const attendanceSchedulerRef = useRef<boolean>(false);
 
   /* ---------------- ATTENDANCE SCHEDULER ---------------- */
@@ -117,6 +120,9 @@ const { showError } = useContext(ErrorContext);
       const safeName = storedName || '';
 
       const isAdminRole = designation === 'admin';
+      const isAccountantRole = userType === 'management' && designation === 'accountant';
+      const isBusManagerRole =
+        userType === 'management' && (designation === 'bus manager' || designation === 'busmanager');
       const isChiefRole = userType === 'management' && designation === 'superadmin';
 
       if (storedUser && userType) {
@@ -148,6 +154,22 @@ const { showError } = useContext(ErrorContext);
           return;
         }
 
+        if (isAccountantRole) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'AccountantDashboard', params: { username: storedUser, name: safeName } }],
+          });
+          return;
+        }
+
+        if (isBusManagerRole) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'BusManagerDashboard' }],
+          });
+          return;
+        }
+
         if ((userType === 'management' || userType === 'marketing') && isAdminRole) {
           navigation.reset({
             index: 0,
@@ -163,12 +185,6 @@ const { showError } = useContext(ErrorContext);
       );
     }
   }, [navigation, showError]);
-
-  /* ---------------- ATTENDANCE AUTO START ---------------- */
-
-  useEffect(() => {
-    startAutomaticAttendanceTracking();
-  }, [startAutomaticAttendanceTracking]);
 
   /* ---------------- LOGIN HANDLER ---------------- */
 
@@ -218,7 +234,7 @@ const { showError } = useContext(ErrorContext);
     }
 
     try {
-      console.time('LOGIN_TOTAL');
+      console.log('LOGIN_TOTAL start');
 
       const response = await axios.post(
         'http://162.215.210.38:3010/api/login-credentials',
@@ -235,6 +251,28 @@ const { showError } = useContext(ErrorContext);
       }
 
       // ✅ Store user info in AsyncStorage
+      const normalizedDesignation = String(data.designation || '').toLowerCase().trim();
+      const designationKey = normalizedDesignation.replace(/[\s_-]+/g, '');
+      const isAdminRole = designationKey === 'admin';
+      const isAccountantRole = data.userType === 'management' && designationKey === 'accountant';
+      const isBusManagerRole =
+        data.userType === 'management' &&
+        designationKey === 'busmanager';
+      const isChiefRole = data.userType === 'management' && designationKey === 'superadmin';
+      const nextScreen = data.userType === 'teacher'
+        ? 'TeacherDashboard'
+        : data.userType === 'student'
+          ? 'ParentDetails'
+          : isChiefRole
+            ? 'ChiefDashboard'
+            : isAccountantRole
+              ? 'AccountantDashboard'
+              : isBusManagerRole
+                ? 'BusManagerDashboard'
+              : isAdminRole
+                ? 'AdminDashboard'
+                : 'TeacherDashboard';
+
       await AsyncStorage.multiSet([
         ['userType', data.userType],
         ['username', username],
@@ -242,16 +280,12 @@ const { showError } = useContext(ErrorContext);
         ['schoolCode', String(data.schoolCode || '')],
         ['designation', data.designation || ''],
         ['userDetails', JSON.stringify(data)],
-        ['lastScreen', 'TeacherDashboard'],
+        ['lastScreen', nextScreen],
       ]);
 
       setTeacherUsername(username);
 
       // Decide dashboard navigation    
-      const normalizedDesignation = String(data.designation || '').toLowerCase().trim();
-      const isAdminRole = normalizedDesignation === 'admin';
-      const isChiefRole = data.userType === 'management' && normalizedDesignation === 'superadmin';
-
       if (data.userType === 'teacher') {
         const granted = await askToEnableLocation();
         if (granted) {
@@ -271,6 +305,10 @@ const { showError } = useContext(ErrorContext);
         navigation.replace('ParentDetails', { username, name: data.name });
       } else if (isChiefRole) {
         navigation.replace('ChiefDashboard', { username, name: data.name });
+      } else if (isAccountantRole) {
+        navigation.replace('AccountantDashboard', { username, name: data.name });
+      } else if (isBusManagerRole) {
+        navigation.replace('BusManagerDashboard');
       } else if ((data.userType === 'management' || data.userType === 'marketing') && isAdminRole) {
         navigation.replace('AdminDashboard');
       } else {
@@ -306,7 +344,7 @@ const { showError } = useContext(ErrorContext);
         }
       }, 0);
 
-      console.timeEnd('LOGIN_TOTAL');
+      console.log('LOGIN_TOTAL end');
     } catch (err: any) {
       if (err.response) {
         // Server returned a response (e.g., 401, 400)
@@ -394,14 +432,14 @@ const { showError } = useContext(ErrorContext);
                             />
                           </View>
           
-                          <View style={styles.rightContainer}>
-                                 <TouchableOpacity style={styles.buttonContainer} onPress={handleLogin}>
-                                        <Text style={styles.buttonText}>Log In</Text>
-                                      </TouchableOpacity>
-                            
-                                      <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => setModalVisible(true)}>
-                                        <Text style={styles.forgotPasswordText}>Forgot Password</Text>
-                                      </TouchableOpacity>
+                      <View style={styles.rightContainer}>
+                             <TouchableOpacity style={styles.buttonContainer} onPress={handleLogin}>
+                                    <Text style={styles.buttonText}>Log In</Text>
+                                  </TouchableOpacity>
+                
+                                  <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => setModalVisible(true)}>
+                                    <Text style={styles.forgotPasswordText}>Forgot Password</Text>
+                                  </TouchableOpacity>
                           </View>
                                      
                         </View>

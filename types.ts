@@ -21,6 +21,7 @@ export type RootStackParamList = {
   TopicOfDay: { username?: string; name?: string } | undefined;
   ParentDashboard: { username?: string; name?: string } | undefined;
   ParentAcademic: { username?: string; name?: string } | undefined;
+  ParentAttendance: { username?: string; name?: string } | undefined;
   ParentFees: { username?: string; name?: string } | undefined;
   ParentHomework: { username?: string; name?: string } | undefined;
   ParentTimetable: { username?: string; name?: string } | undefined;
@@ -30,7 +31,9 @@ export type RootStackParamList = {
   ParentHomepage: { username?: string; name?: string } | undefined;
   ParentDetails: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;
+  AccountantDashboard: { username?: string; name?: string } | undefined;
   ChiefDashboard: { username?: string; name?: string } | undefined;
+  BusManagerDashboard: undefined;
   AcademicStudent: undefined;
   AcademicTeacher: undefined;
   ExamManagement: undefined;

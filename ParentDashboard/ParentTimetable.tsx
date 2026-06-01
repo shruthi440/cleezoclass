@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -7,11 +7,16 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { BarChart } from 'react-native-chart-kit';
+import LinearGradient from 'react-native-linear-gradient';
 
+import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
 import { ErrorContext } from '../ErrorContext';
 
@@ -19,6 +24,11 @@ const ParentTimetable: React.FC<
   NativeStackScreenProps<RootStackParamList, 'ParentTimetable'>
   & { embedded?: boolean }
 > = ({ embedded = false }) => {
+  const { height, width } = useWindowDimensions();
+  const appStyles = useMemo(
+    () => createAppStyles({ phoneWidth: width, phoneHeight: height }),
+    [height, width],
+  );
   const [studentData, setStudentData] = useState<any>(null);
   const [timetable, setTimetable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,18 +121,161 @@ const ParentTimetable: React.FC<
   const periodHeaders = timetable.length > 0 ? getSortedPeriods(timetable[0]) : [];
   const rowLabelWidth = 88;
   const periodCellWidth = 110;
+  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const todayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+  const todayRow = timetable.find(
+    (row) => String(row.day || '').toLowerCase() === todayName.toLowerCase(),
+  );
+  const todayPeriods = todayRow ? getSortedPeriods(todayRow) : [];
+  const nowMinutes = (() => {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  })();
+  const parseTimeToMinutes = (value?: string) => {
+    const raw = String(value || '').trim();
+    if (!raw) return Number.MAX_SAFE_INTEGER;
+    const [hh = '', mm = ''] = raw.split(':');
+    const hours = Number(hh);
+    const mins = Number(mm);
+    if (Number.isNaN(hours) || Number.isNaN(mins)) return Number.MAX_SAFE_INTEGER;
+    return hours * 60 + mins;
+  };
+  const nextPeriodToday = todayPeriods.find(
+    (period) => parseTimeToMinutes(period.fromTime) > nowMinutes,
+  );
+  const currentDayIndex = dayOrder.findIndex(
+    (day) => day.toLowerCase() === todayName.toLowerCase(),
+  );
+  const upcomingDays = [
+    ...dayOrder.slice(currentDayIndex + 1),
+    ...dayOrder.slice(0, Math.max(currentDayIndex, 0)),
+  ];
+  const nextDayRow = upcomingDays
+    .map((day) => timetable.find((row) => String(row.day || '').toLowerCase() === day.toLowerCase()))
+    .find((row) => row && getSortedPeriods(row).length > 0);
+  const nextPeriod = nextPeriodToday || (nextDayRow ? getSortedPeriods(nextDayRow)[0] : null);
+  const nextPeriodDay = nextPeriodToday ? todayName : nextDayRow?.day || '';
+  const subjectFrequencyMap = new Map<string, number>();
+  timetable.forEach((row) => {
+    getSortedPeriods(row).forEach((period: any) => {
+      const subject = String(period?.subject || '--').trim() || '--';
+      subjectFrequencyMap.set(subject, (subjectFrequencyMap.get(subject) || 0) + 1);
+    });
+  });
+  const subjectFrequencyEntries = Array.from(subjectFrequencyMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const timetableGraphLabels = subjectFrequencyEntries.map(([subject]) =>
+    subject.length > 10 ? `${subject.slice(0, 10)}…` : subject,
+  );
+  const timetableGraphData = subjectFrequencyEntries.map(([, count]) => count);
 
   return (
     <SafeAreaView style={ttStyles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <ScrollView nestedScrollEnabled contentContainerStyle={ttStyles.scrollContent}>
         <View style={[ttStyles.page, embedded && ttStyles.embeddedPage]}>
-          <View style={ttStyles.pageHeader}>
-            <View>
-              <Text style={ttStyles.pageTitle}>Timetable</Text>
-              <Text style={ttStyles.pageSubtitle}>
-                {studentData?.name || '-'} | {studentData?.class_name || '-'} {studentData?.section || ''}
-              </Text>
+          <LinearGradient
+            colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={ttStyles.academicGradientSection}
+          >
+            <View style={ttStyles.pageHeader}>
+              <View>
+                <Text style={ttStyles.pageTitle}>Timetable</Text>
+                <Text style={ttStyles.pageSubtitle}>
+                  {studentData?.name || '-'} | {studentData?.class_name || '-'} {studentData?.section || ''}
+                </Text>
+              </View>
+            </View>
+
+            <View style={ttStyles.graphSection}>
+              <View style={ttStyles.graphSectionInner}>
+                <Text style={ttStyles.graphExplain}>
+                  This chart shows which subjects appear most often in the timetable.
+                </Text>
+
+                <View style={ttStyles.graphLegendRow}>
+                  <View style={ttStyles.graphLegendItem}>
+                    <View style={[ttStyles.graphLegendDot, { backgroundColor: '#0D3F66' }]} />
+                    <Text style={ttStyles.graphLegendText}>Subject frequency</Text>
+                  </View>
+                </View>
+
+                {timetableGraphData.length === 0 || timetableGraphData.every((value) => value === 0) ? (
+                  <View style={ttStyles.graphEmptyPlain}>
+                    <Text style={ttStyles.graphEmptyTitlePlain}>No timetable graph yet</Text>
+                    <Text style={ttStyles.graphEmptyTextPlain}>
+                      Add timetable entries to see the weekly distribution.
+                    </Text>
+                  </View>
+                ) : (
+                  <BarChart
+                    data={{
+                      labels: timetableGraphLabels,
+                      datasets: [{ data: timetableGraphData }],
+                    }}
+                    width={Math.max(width - 48, timetableGraphLabels.length * 64)}
+                    height={220}
+                    fromZero
+                    showValuesOnTopOfBars
+                    withInnerLines={false}
+                    withOuterLines
+                    segments={4}
+                    chartConfig={{
+                      backgroundColor: '#FFFFFF',
+                      backgroundGradientFrom: '#FFFFFF',
+                      backgroundGradientTo: '#FFFFFF',
+                      decimalPlaces: 0,
+                      color: opacity => `rgba(13, 63, 102, ${opacity})`,
+                      labelColor: () => '#7A7A80',
+                      propsForBackgroundLines: {
+                        stroke: '#E9E9EE',
+                        strokeDasharray: '',
+                      },
+                      propsForBarLabels: {
+                        fill: '#111',
+                      },
+                    }}
+                    style={ttStyles.graphChartPlain}
+                  />
+                )}
+              </View>
+            </View>
+          </LinearGradient>
+
+          <View style={ttStyles.summaryRow}>
+            <View style={[appStyles.dashboardGridCard, ttStyles.summaryCardLeft]}>
+              <View style={appStyles.dashboardGridCornerAccent} />
+              <View style={appStyles.gridIconWrap}>
+                <MaterialIcons name="calendar-today" size={24} color="#000000" />
+              </View>
+              <View style={ttStyles.summaryCardContent}>
+                <Text style={ttStyles.summaryCardLabel}>Today&apos;s Classes</Text>
+                <Text style={ttStyles.summaryCardValue}>{todayPeriods.length}</Text>
+                <Text style={ttStyles.summaryCardText}>
+                  {todayRow ? `${todayRow.day} schedule` : 'No classes today'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[appStyles.dashboardGridCard, ttStyles.summaryCardRight]}>
+              <View style={appStyles.dashboardGridCornerAccent} />
+              <View style={appStyles.gridIconWrap}>
+                <MaterialIcons name="schedule" size={24} color="#000000" />
+              </View>
+              <View style={ttStyles.summaryCardContent}>
+                <Text style={ttStyles.summaryCardLabel}>Next Period</Text>
+                <Text style={ttStyles.summaryCardValue}>
+                  {nextPeriod ? String(nextPeriod.subject || '--') : '--'}
+                </Text>
+                <Text style={ttStyles.summaryCardText}>
+                  {nextPeriod
+                    ? `${nextPeriodDay} • ${String(nextPeriod.fromTime || '').slice(0, 5)} - ${String(nextPeriod.toTime || '').slice(0, 5)}`
+                    : 'No upcoming period'}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -234,18 +387,136 @@ const ttStyles = StyleSheet.create({
     backgroundColor: '#F6F6F7',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
     paddingBottom: 28,
   },
   page: {
-    gap: 16,
+    gap: 12,
   },
   embeddedPage: {
     padding: 0,
   },
   pageHeader: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  summaryCardLeft: {
+    marginRight: 8,
+  },
+  summaryCardRight: {
+    marginLeft: 8,
+  },
+  summaryCardContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 22,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
+  },
+  summaryCardLabel: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#191919',
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  summaryCardValue: {
+    fontSize: 14.5,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: '#2F2F31',
+    textAlign: 'right',
+    marginBottom: 6,
+  },
+  summaryCardText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#60646C',
+    textAlign: 'right',
+    fontWeight: '600',
+  },
+  academicGradientSection: {
+    marginTop: 0,
+    marginBottom: 12,
+    marginHorizontal: 0,
+    paddingTop: 16,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+  },
+  graphSection: {
+    marginTop: 0,
+    marginBottom: 2,
+    marginHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+  },
+  graphSectionInner: {
+    paddingHorizontal: 0,
+    paddingBottom: 8,
+  },
+  graphExplain: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#444',
+    marginBottom: 8,
+  },
+  graphLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  graphLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  graphLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginRight: 6,
+  },
+  graphLegendText: {
+    fontSize: 11.5,
+    color: '#333',
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  graphEmptyPlain: {
+    minHeight: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+  },
+  graphEmptyTitlePlain: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    color: '#111',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  graphEmptyTextPlain: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#444',
+    textAlign: 'center',
+  },
+  graphChartPlain: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
   },
   pageTitle: {
     fontSize: 26,

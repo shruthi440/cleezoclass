@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Animated,
   Image,
   ImageSourcePropType,
   Modal,
   Pressable,
+  StyleSheet,
   ScrollView,
   StatusBar,
   Text,
@@ -18,10 +20,13 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
+import { BarChart } from 'react-native-chart-kit';
+import LinearGradient from 'react-native-linear-gradient';
 
 import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
 import ParentAcademic from './ParentAcademic';
+import ParentAttendance from './ParentAttendance';
 import ParentHomework from './ParentHomwork';
 import ParentFees from './ParentFees';
 import ParentTimetable from './ParentTimetable';
@@ -44,6 +49,7 @@ type ParentModuleRoute =
   | 'AcademicSummary'
   | 'FeesSummary'
   | 'ParentAcademic'
+  | 'ParentAttendance'
   | 'ParentFees'
   | 'ParentHomework'
   | 'ParentTimetable'
@@ -58,6 +64,12 @@ type ParentTile = {
   kind: IconKind;
   route: ParentModuleRoute;
   component: React.ComponentType<any>;
+  iconColor: string;
+  borderColor: string;
+  iconBg: string;
+  cardBg: string;
+  metaLabel: string;
+  metaValue: string;
 };
 
 type ParentChild = {
@@ -75,11 +87,12 @@ type ParentChild = {
   class_teacher?: string;
   gender?: string;
   school_name?: string;
+  photo?: string;
 };
 
-const heroImage: ImageSourcePropType = require('../assets/dashboard.png');
 const logoImage: ImageSourcePropType = require('../assets/Cleezo.png');
 const backArrowImage: ImageSourcePropType = require('../assets/Arrow.png');
+const studentPhotoUploadBase = 'https://cleezoclass.com:4000/CRM/public/uploads';
 
 const normalizeInstituteLogo = (rawLogo: any) => {
   if (!rawLogo) return '';
@@ -118,7 +131,72 @@ const normalizeInstituteLogo = (rawLogo: any) => {
   return '';
 };
 
-const topChips = ['Overview', 'Learning', 'Support', 'Events'];
+const decodeBase64Text = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const atobFn = (globalThis as any).atob;
+    if (typeof atobFn === 'function') return atobFn(raw);
+  } catch {}
+  try {
+    const bufferCtor = (globalThis as any).Buffer;
+    if (bufferCtor?.from) return bufferCtor.from(raw, 'base64').toString('utf8');
+  } catch {}
+  return '';
+};
+
+const resolveStudentPhotoUri = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const buildUploadUrl = (path: string) => {
+    const cleanPath = String(path || '').trim().replace(/^\/+/, '');
+    if (!cleanPath) return studentPhotoUploadBase;
+
+    const relativePath = cleanPath
+      .replace(/^CRM\/public\/uploads\/?/i, '')
+      .replace(/^uploads\/?/i, '')
+      .replace(/^\/+/, '');
+
+    return `${studentPhotoUploadBase}/${relativePath}`;
+  };
+
+  if (raw.startsWith('data:image')) {
+    const base64Part = raw.split(',')[1] || '';
+    const decoded = decodeBase64Text(base64Part);
+    const decodedPath = String(decoded || '').trim();
+    if (decodedPath.includes('CRM/public/uploads') || decodedPath.startsWith('/uploads/') || decodedPath.startsWith('uploads/')) {
+      return buildUploadUrl(decodedPath);
+    }
+    if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) return decodedPath;
+    return raw;
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  if (raw.includes('CRM/public/uploads') || raw.startsWith('/uploads/') || raw.startsWith('uploads/')) {
+    return buildUploadUrl(raw);
+  }
+  if (raw.startsWith('L3VwbG9hZHMv') || raw.startsWith('dXBsb2Fkcy8')) {
+    const decodedPath = String(decodeBase64Text(raw) || '').trim();
+    if (decodedPath.includes('CRM/public/uploads') || decodedPath.startsWith('/uploads/') || decodedPath.startsWith('uploads/')) {
+      return buildUploadUrl(decodedPath);
+    }
+    if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) return decodedPath;
+  }
+  return raw;
+};
+
+const resolveRenderablePhotoUri = (value?: string | null) => {
+  const uri = resolveStudentPhotoUri(value);
+  if (!uri) return '';
+  if (uri.startsWith('data:image')) return uri;
+  try {
+    return encodeURI(uri);
+  } catch {
+    return uri;
+  }
+};
+
+const topChips = ['Overview', 'Learning', 'Attendance', 'Support', 'Events'];
 
 const parentTiles: ParentTile[] = [
   {
@@ -127,6 +205,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentAcademic',
     component: ParentAcademic,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Summary',
+    metaValue: '',
   },
   {
     label: 'Homework',
@@ -134,6 +218,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentHomework',
     component: ParentHomework,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Tasks',
+    metaValue: '',
   },
   {
     label: 'Fees',
@@ -141,6 +231,25 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentFees',
     component: ParentFees,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Summary',
+    metaValue: '',
+  },
+  {
+    label: 'Attendance',
+    icon: 'event-note',
+    kind: 'material',
+    route: 'ParentAttendance',
+    component: ParentAttendance,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Leaves',
+    metaValue: '',
   },
   {
     label: 'Timetable',
@@ -148,6 +257,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentTimetable',
     component: ParentTimetable,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Slot',
+    metaValue: '',
   },
   {
     label: 'Calendar',
@@ -155,6 +270,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentCalender',
     component: ParentCalender,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Events',
+    metaValue: '',
   },
   {
     label: 'Photos',
@@ -162,6 +283,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentPhotos',
     component: ParentPhotos,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Gallery',
+    metaValue: '',
   },
   {
     label: 'Chat & Tickets',
@@ -169,6 +296,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentLiveChatTicket',
     component: ParentLiveChatTicket,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Support',
+    metaValue: '',
   },
   {
     label: 'Announcements',
@@ -176,6 +309,12 @@ const parentTiles: ParentTile[] = [
     kind: 'material',
     route: 'ParentHomepage',
     component: ParentHomepage,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Updates',
+    metaValue: '',
   },
 ];
 
@@ -188,7 +327,10 @@ const renderIcon = (kind: IconKind, name: string, color: string, size: number) =
 };
 
 const computeAcademicSummary = (performance: any[], testTypes: any[]) => {
-  if (!performance.length) return { grade: '-', percentage: '0.00' };
+  const safePerformance = Array.isArray(performance) ? performance : [];
+  const safeTestTypes = Array.isArray(testTypes) ? testTypes : [];
+
+  if (!safePerformance.length) return { grade: '-', percentage: '0.00' };
 
   const fallbackTermRows = [
     { label: 'FA1', key: 'FA1' },
@@ -199,8 +341,8 @@ const computeAcademicSummary = (performance: any[], testTypes: any[]) => {
     { label: 'SA2', key: 'SA2' },
   ];
 
-  const termRows = (testTypes || []).length
-    ? testTypes
+  const termRows = safeTestTypes.length
+    ? safeTestTypes
         .filter((row: any) => row?.key && row?.label)
         .map((row: any) => ({ key: row.key, label: row.label }))
     : fallbackTermRows;
@@ -236,7 +378,7 @@ const computeAcademicSummary = (performance: any[], testTypes: any[]) => {
   let obtained = 0;
   let total = 0;
 
-  performance.forEach((subj) => {
+  safePerformance.forEach((subj) => {
     termRows.forEach((row) => {
       const mark = getMarkForRow(subj, row);
       const maxMark = getMaxForRow(subj, row);
@@ -281,8 +423,15 @@ const ParentDashboard = () => {
   const [loginName, setLoginName] = useState('Parent');
   const [schoolLogo, setSchoolLogo] = useState<string>('');
   const [academicSummary, setAcademicSummary] = useState({ grade: '-', percentage: '0.00' });
-  const [feeSummary, setFeeSummary] = useState({ paid: '₹ 0.00', due: '₹ 0.00' });
+  const [feeSummary, setFeeSummary] = useState({ paid: '₹ 0.00', due: '₹ 0.00', percent: '0' });
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [leaveData, setLeaveData] = useState<any[]>([]);
+  const [attendanceChartData, setAttendanceChartData] = useState<any>(null);
+  const [attendanceCount, setAttendanceCount] = useState(0);
   const scrollRef = useRef<ScrollView | null>(null);
+  const parentActionAnimValues = useRef<Animated.Value[]>([]);
+  const parentActionImageAnimValues = useRef<Animated.Value[]>([]);
+  const parentActionImageLoops = useRef<Animated.CompositeAnimation[]>([]);
   const sectionPositions = useRef<Partial<Record<ParentModuleRoute, number>>>({});
   const { width, height } = useWindowDimensions();
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
@@ -291,6 +440,7 @@ const ParentDashboard = () => {
   const normalizeText = (value: any) =>
     String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
   const normalizePhone = (value: any) => String(value ?? '').replace(/\D/g, '');
+  const normalizeValue = (value: any) => String(value || '').trim().toLowerCase();
 
   const cacheTeacherProfile = async (profile: Record<string, any> | null) => {
     if (!profile) return;
@@ -323,6 +473,7 @@ const ParentDashboard = () => {
       const merged = {
         ...(currentStudent || {}),
         ...data,
+        photoUrl: resolveRenderablePhotoUri((currentStudent || {})?.photoUrl || data.photoUrl || data.photo || ''),
       };
 
       if (merged.studentId && !merged.id) merged.id = merged.studentId;
@@ -359,15 +510,20 @@ const ParentDashboard = () => {
       const json = await response.json().catch(() => null);
 
       if (response.ok && json?.success && json?.student) {
-        setStudentProfile(json.student);
-        await AsyncStorage.setItem('parentProfile', JSON.stringify(json.student));
-        return json.student;
+        const nextProfile = {
+          ...json.student,
+          photoUrl: resolveRenderablePhotoUri(json.student.photoUrl || json.student.photo || ''),
+        };
+        setStudentProfile(nextProfile);
+        await AsyncStorage.setItem('parentProfile', JSON.stringify(nextProfile));
+        return nextProfile;
       }
 
       const fallbackProfile = {
         username,
         schoolCode,
         name: (await AsyncStorage.getItem('name')) || 'Parent',
+        photoUrl: resolveRenderablePhotoUri((await AsyncStorage.getItem('photoUrl')) || ''),
       };
       setStudentProfile(fallbackProfile);
       await AsyncStorage.setItem('parentProfile', JSON.stringify(fallbackProfile));
@@ -411,8 +567,12 @@ const ParentDashboard = () => {
       });
 
       if (siblingsRes.data.success && Array.isArray(siblingsRes.data.siblings)) {
-        setChildren(siblingsRes.data.siblings);
-        return siblingsRes.data.siblings;
+        const nextChildren = siblingsRes.data.siblings.map((child: any) => ({
+          ...child,
+          photoUrl: resolveRenderablePhotoUri(child.photoUrl || child.photo || ''),
+        }));
+        setChildren(nextChildren);
+        return nextChildren;
       }
 
       setChildren([]);
@@ -493,11 +653,87 @@ const ParentDashboard = () => {
       setFeeSummary({
         paid: formatINR(paidAmount),
         due: formatINR(totalAmount - paidAmount),
+        percent: totalAmount > 0 ? String(Math.max(0, Math.min(100, Math.round((paidAmount / totalAmount) * 100)))) : '0',
       });
     } catch (error) {
       console.error('Failed to load parent summaries:', error);
     }
   };
+
+  const filteredAttendanceLeaves = useMemo(() => {
+    const selectedUsername = normalizeValue(studentData?.username || studentProfile?.username);
+    const selectedName = normalizeValue(studentData?.name || studentProfile?.name);
+    const selectedClass = normalizeValue(studentData?.class_name || studentProfile?.class_name);
+    const selectedSection = normalizeValue(studentData?.section || studentProfile?.section);
+
+    return (Array.isArray(leaveData) ? leaveData : []).filter((item: any) => {
+      const itemUsername = normalizeValue(item?.username);
+      const itemName = normalizeValue(item?.student_name);
+      const itemClass = normalizeValue(item?.class_name);
+      const itemSection = normalizeValue(item?.section);
+
+      const classSectionMatch = selectedClass && selectedSection
+        ? itemClass === selectedClass && itemSection === selectedSection
+        : true;
+
+      const identityMatch = selectedName ? itemName === selectedName : false;
+      const usernameMatch = selectedUsername ? itemUsername === selectedUsername : false;
+
+      return (identityMatch && classSectionMatch) || (usernameMatch && classSectionMatch);
+    });
+  }, [leaveData, studentData?.username, studentData?.name, studentData?.class_name, studentData?.section, studentProfile?.username, studentProfile?.name, studentProfile?.class_name, studentProfile?.section]);
+
+  useEffect(() => {
+    const leaveCount = filteredAttendanceLeaves.length;
+    setAttendanceCount(leaveCount);
+
+    const leaveCountByType: Record<string, number> = {};
+    filteredAttendanceLeaves.forEach((item: any) => {
+      const key = String(item?.leave_type || 'Leave').trim() || 'Leave';
+      leaveCountByType[key] = (leaveCountByType[key] || 0) + 1;
+    });
+
+    const labels = Object.keys(leaveCountByType);
+    const data = Object.values(leaveCountByType);
+
+    setAttendanceChartData(
+      labels.length
+        ? {
+            labels,
+            datasets: [{ data }],
+          }
+        : null
+    );
+  }, [filteredAttendanceLeaves]);
+
+  useEffect(() => {
+    const fetchAttendanceLeaves = async () => {
+      try {
+        const schoolCode = String(
+          studentData?.schoolCode ||
+          studentProfile?.schoolCode ||
+          (await AsyncStorage.getItem('schoolCode')) ||
+          ''
+        ).trim();
+
+        if (!schoolCode) {
+          setLeaveData([]);
+          return;
+        }
+
+        const response = await fetch(
+          `http://162.215.210.38:3010/api/api/leave/all?schoolCode=${encodeURIComponent(schoolCode)}`
+        );
+        const data = await response.json().catch(() => []);
+        setLeaveData(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load attendance leaves:', error);
+        setLeaveData([]);
+      }
+    };
+
+    void fetchAttendanceLeaves();
+  }, [studentData?.schoolCode, studentProfile?.schoolCode]);
 
   const refreshParentAccount = async () => {
     const data = await loadStudentData();
@@ -574,9 +810,12 @@ const ParentDashboard = () => {
           (tile) =>
             tile.route === 'ParentAcademic' ||
             tile.route === 'ParentFees' ||
+            tile.route === 'ParentAttendance' ||
             tile.route === 'ParentHomework' ||
             tile.route === 'ParentTimetable'
         );
+      case 'Attendance':
+        return parentTiles.filter((tile) => tile.route === 'ParentAttendance');
       case 'Support':
         return parentTiles.filter((tile) => tile.route === 'ParentLiveChatTicket');
       case 'Events':
@@ -587,18 +826,6 @@ const ParentDashboard = () => {
         return parentTiles;
     }
   }, [selectedChip]);
-
-  const visibleTileColumns = useMemo(() => {
-    return visibleTiles.reduce<ParentTile[][]>((columns, tile, index) => {
-      if (index % 2 === 0) {
-        columns.push([tile]);
-      } else {
-        columns[columns.length - 1].push(tile);
-      }
-
-      return columns;
-    }, []);
-  }, [visibleTiles]);
 
   const selectedChipTiles = useMemo(() => {
     const quickOrder: ParentModuleRoute[] = [
@@ -620,11 +847,14 @@ const ParentDashboard = () => {
         switch (selectedChip) {
           case 'Learning':
             return (
-              tile.route === 'ParentAcademic' ||
-              tile.route === 'ParentFees' ||
-              tile.route === 'ParentHomework' ||
-              tile.route === 'ParentTimetable'
-            );
+            tile.route === 'ParentAcademic' ||
+            tile.route === 'ParentFees' ||
+            tile.route === 'ParentAttendance' ||
+            tile.route === 'ParentHomework' ||
+            tile.route === 'ParentTimetable'
+          );
+          case 'Attendance':
+            return tile.route === 'ParentAttendance';
           case 'Support':
             return tile.route === 'ParentLiveChatTicket';
           case 'Events':
@@ -643,6 +873,8 @@ const ParentDashboard = () => {
     switch (selectedChip) {
       case 'Learning':
         return 'Academic progress, fees, homework and timetable live here.';
+      case 'Attendance':
+        return 'Attendance leaves and history are shown here.';
       case 'Support':
         return 'Open chat and ticket tools for parent communication.';
       case 'Events':
@@ -652,12 +884,181 @@ const ParentDashboard = () => {
     }
   }, [selectedChip]);
 
+  const dashboardTiles = useMemo(
+    () =>
+      visibleTiles.map((tile) => {
+        if (tile.route === 'ParentAcademic') {
+          return {
+            ...tile,
+            metaLabel: 'Summary',
+            metaValue: `${academicSummary.grade} • ${academicSummary.percentage}%`,
+          };
+        }
+
+        if (tile.route === 'ParentFees') {
+          return {
+            ...tile,
+            metaLabel: 'Summary',
+            metaValue: feeSummary.due,
+          };
+        }
+
+        if (tile.route === 'ParentAttendance') {
+          return {
+            ...tile,
+            metaLabel: 'Leaves',
+            metaValue: String(attendanceCount),
+          };
+        }
+
+        if (tile.route === 'ParentHomework') {
+          return {
+            ...tile,
+            metaLabel: 'Tasks',
+            metaValue: 'Open work',
+          };
+        }
+
+        if (tile.route === 'ParentTimetable') {
+          return {
+            ...tile,
+            metaLabel: 'Slot',
+            metaValue: 'Today',
+          };
+        }
+
+        if (tile.route === 'ParentCalender') {
+          return {
+            ...tile,
+            metaLabel: 'Events',
+            metaValue: 'This week',
+          };
+        }
+
+        if (tile.route === 'ParentPhotos') {
+          return {
+            ...tile,
+            metaLabel: 'Gallery',
+            metaValue: 'Latest photos',
+          };
+        }
+
+        if (tile.route === 'ParentLiveChatTicket') {
+          return {
+            ...tile,
+            metaLabel: 'Support',
+            metaValue: 'Chat now',
+          };
+        }
+
+        return {
+          ...tile,
+          metaLabel: 'Updates',
+          metaValue: 'News',
+        };
+      }),
+    [academicSummary.grade, academicSummary.percentage, attendanceCount, feeSummary.due, visibleTiles]
+  );
+
+  const parentActionCards = useMemo(
+    () => [
+      {
+        id: 'fees-due',
+        title: 'Fees Due',
+        value: feeSummary.due,
+        subtitle: 'Review payment summary',
+        cta: 'Open Fees',
+        image: require('../assets/feesAnimated.png'),
+        route: 'ParentFees' as ParentModuleRoute,
+        accent: '#FFF',
+      },
+      {
+        id: 'attendance',
+        title: 'Attendance',
+        value: `${attendanceCount} leaves`,
+        subtitle: 'Check attendance history',
+        cta: 'Open Attendance',
+        image: require('../assets/leaveannimated.png'),
+        route: 'ParentAttendance' as ParentModuleRoute,
+        accent: '#FFF',
+      },
+      {
+        id: 'homework',
+        title: 'Homework',
+        value: 'Open work',
+        subtitle: 'See assignments and tasks',
+        cta: 'Open Homework',
+        image: require('../assets/homework animated.png'),
+        route: 'ParentHomework' as ParentModuleRoute,
+        accent: '#FFF',
+      },
+    ],
+    [attendanceCount, feeSummary.due]
+  );
+
+  useEffect(() => {
+    if (parentActionAnimValues.current.length !== parentActionCards.length) {
+      parentActionAnimValues.current = parentActionCards.map(() => new Animated.Value(0));
+    }
+
+    const animations = parentActionAnimValues.current.map((animValue) =>
+      Animated.spring(animValue, {
+        toValue: 1,
+        friction: 8,
+        tension: 70,
+        useNativeDriver: true,
+      })
+    );
+
+    Animated.stagger(120, animations).start();
+  }, [parentActionCards, parentActionAnimValues]);
+
+  useEffect(() => {
+    if (parentActionImageAnimValues.current.length !== parentActionCards.length) {
+      parentActionImageAnimValues.current = parentActionCards.map(() => new Animated.Value(0));
+    }
+
+    parentActionImageLoops.current.forEach((animation) => animation.stop());
+    parentActionImageLoops.current = parentActionCards.map((_, index) => {
+      const animValue = parentActionImageAnimValues.current[index];
+      animValue.setValue(0);
+
+      const sequence = Animated.sequence([
+        Animated.delay(index * 140),
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(animValue, {
+              toValue: 1,
+              duration: 1800,
+              useNativeDriver: true,
+            }),
+            Animated.timing(animValue, {
+              toValue: 0,
+              duration: 1800,
+              useNativeDriver: true,
+            }),
+          ])
+        ),
+      ]);
+
+      sequence.start();
+      return sequence;
+    });
+
+    return () => {
+      parentActionImageLoops.current.forEach((animation) => animation.stop());
+    };
+  }, [parentActionCards]);
+
   const openModule = (route: ParentModuleRoute) => {
     setSelectedModule(route);
-    const y = sectionPositions.current[route];
-    if (typeof y === 'number' && scrollRef.current) {
-      scrollRef.current.scrollTo({ y: Math.max(0, y - 12), animated: true });
-    }
+    (navigation.navigate as any)(
+      route,
+      {
+        username: studentData?.username || studentProfile?.username || '',
+        name: studentData?.name || studentProfile?.name || '',
+      }
+    );
   };
 
   const handleGoBack = () => {
@@ -668,7 +1069,7 @@ const ParentDashboard = () => {
 
   const handleOpenHomePanel = () => {
     setSelectedChip('Overview');
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    setSelectedModule('ParentAcademic');
   };
 
   useEffect(() => {
@@ -692,6 +1093,41 @@ const ParentDashboard = () => {
     void refreshParentAccount();
   };
 
+  const schoolNameDisplay =
+    String(
+      studentData?.school_name ||
+        studentProfile?.school_name ||
+        studentData?.schoolCode ||
+        studentProfile?.schoolCode ||
+        teacherProfileCache?.schoolCode ||
+        'School Name'
+    ).trim();
+  const activeStudentName =
+    String(studentData?.name || studentProfile?.name || loginName || 'Student').trim() || 'Student';
+  const activeStudentClass =
+    String(studentData?.class_name || studentProfile?.class_name || '-').trim() || '-';
+  const activeStudentSection =
+    String(studentData?.section || studentProfile?.section || '-').trim() || '-';
+  const activeStudentPhone = String(
+    studentData?.phone_no || studentProfile?.phone_no || studentProfile?.mobile || studentData?.mobile || '-'
+  ).trim() || '-';
+  const activeStudentFather =
+    String(studentData?.father_name || studentProfile?.father_name || '-').trim() || '-';
+  const activeStudentId = String(
+    studentData?.studentId || studentProfile?.studentId || studentData?.id || studentProfile?.id || '-'
+  ).trim() || '-';
+  const activeStudentPhoto = resolveRenderablePhotoUri(
+    studentData?.photoUrl || studentData?.photo || studentProfile?.photoUrl || studentProfile?.photo || ''
+  );
+  const activeStudentInitial = activeStudentName.trim().charAt(0).toUpperCase() || 'S';
+  const studentProfileRows = [
+    { label: 'Student name', value: activeStudentName },
+    { label: 'Class', value: `${activeStudentClass} - ${activeStudentSection}` },
+    { label: 'Father name', value: activeStudentFather },
+    { label: 'Phone', value: activeStudentPhone },
+    { label: 'Student ID', value: activeStudentId },
+  ];
+
   const handleSwitchToChild = async (child: ParentChild) => {
     try {
       const existingSchoolCode = await AsyncStorage.getItem('schoolCode');
@@ -709,7 +1145,7 @@ const ParentDashboard = () => {
         ['name', child.name || ''],
         ['class_name', child.class_name || ''],
         ['section', child.section || ''],
-        ['photoUrl', child.photoUrl || ''],
+        ['photoUrl', resolveRenderablePhotoUri(child.photoUrl || child.photo || '')],
         ['aadhar_no', child.aadhar_no || ''],
         ['address', child.address || ''],
         ['class_teacher', child.class_teacher || ''],
@@ -843,11 +1279,18 @@ const ParentDashboard = () => {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor="#0E0E0F" />
+      <StatusBar barStyle="light-content" backgroundColor={"#0a3d62"} />
 
       <View style={styles.background}>
         <View style={styles.phoneShell}>
           <View style={styles.phoneFrame}>
+            <LinearGradient
+              pointerEvents="none"
+              colors={['#07162F', '#112B57', '#1E3F76']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.dashboardTopGradient}
+            />
             <View style={styles.toolbar}>
               <View style={styles.toolbarBrand}>
                 <Image
@@ -858,53 +1301,125 @@ const ParentDashboard = () => {
               </View>
               <View style={styles.toolbarCenterAbsolute}>
                 <Text style={styles.toolbarBrandName} numberOfLines={1}>
-                 Welcome {loginName}
+                  {schoolNameDisplay}
                 </Text>
               </View>
               <View style={styles.toolbarSpacer} />
-              <Pressable style={styles.toolbarButton} onPress={() => openModule('ParentLiveChatTicket')}>
-                <FontAwesome name="bell" size={18} color="#F4F4F4" />
-              </Pressable>
+              
             </View>
 
+            <View style={styles.dashboardHeroCard}>
+              <LinearGradient
+                colors={['#0A1D3E', '#163568', '#244B85']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.dashboardHeroGradientCard}
+              >
+                <View style={styles.dashboardHeroExpandedLayout}>
+                  <View style={styles.dashboardHeroExpandedLeft}>
+                    <Text style={styles.dashboardHeroSchool} numberOfLines={1}>
+                      {schoolNameDisplay}
+                    </Text>
+                    <Text style={styles.dashboardHeroClass} numberOfLines={1}>
+                      {activeStudentClass} {activeStudentSection}
+                    </Text>
+                    <Text style={styles.dashboardHeroName} numberOfLines={2}>
+                      {activeStudentName}
+                    </Text>
+                  </View>
+                  <View style={styles.dashboardHeroExpandedRight}>
+                    {childrenLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      (() => {
+                        const otherChildren = children.filter(
+                          (child) =>
+                            String(child.id) !==
+                            String(studentData?.studentId || studentProfile?.studentId || ''),
+                        );
+
+                        return (
+                          <ScrollView
+                            horizontal
+                            nestedScrollEnabled
+                            directionalLockEnabled
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.dashboardHeroProfilesRow}
+                          >
+                            {otherChildren.slice(0, 2).map((child, index) => {
+                              const childPhoto = resolveRenderablePhotoUri(child.photoUrl || child.photo || '');
+                              const childInitial =
+                                (child.name || child.username || `S${index + 1}`).trim().charAt(0).toUpperCase() || 'S';
+
+                              return (
+                                <Pressable
+                                  key={child.id || index}
+                                  onPress={() => handleSwitchToChild(child)}
+                                  style={[
+                                    styles.dashboardHeroSecondaryProfile,
+                                    styles.dashboardHeroProfileItem,
+                                  ]}
+                                >
+                                  <View style={styles.dashboardHeroSecondaryAvatarWrap}>
+                                    {childPhoto ? (
+                                      <Image
+                                        source={{ uri: childPhoto }}
+                                        style={styles.dashboardHeroSecondaryAvatar}
+                                        resizeMode="cover"
+                                      />
+                                    ) : (
+                                      <Text style={styles.dashboardHeroSecondaryAvatarText}>
+                                        {childInitial}
+                                      </Text>
+                                    )}
+                                  </View>
+                                </Pressable>
+                              );
+                            })}
+                          </ScrollView>
+                        );
+                      })()
+                    )}
+                  </View>
+                </View>
+                <View style={styles.dashboardHeroActiveProfileFloat} pointerEvents="none">
+                  <View style={styles.dashboardHeroPrimaryProfile}>
+                    {activeStudentPhoto ? (
+                      <Image
+                        source={{ uri: activeStudentPhoto }}
+                        style={styles.dashboardHeroPrimaryAvatar}
+                        resizeMode="cover"
+                        onLoad={() => {
+                          console.log('[ParentDashboard] hero photo loaded', {
+                            uri: activeStudentPhoto,
+                            studentName: activeStudentName,
+                          });
+                        }}
+                        onError={(event) => {
+                          console.log('[ParentDashboard] hero photo failed', {
+                            uri: activeStudentPhoto,
+                            studentName: activeStudentName,
+                            error: event?.nativeEvent?.error || null,
+                          });
+                        }}
+                      />
+                    ) : (
+                      <Text style={styles.dashboardHeroPrimaryAvatarText}>
+                        {activeStudentInitial}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
             <ScrollView
               ref={scrollRef}
               style={styles.scrollArea}
               contentContainerStyle={styles.scrollContent}
-              stickyHeaderIndices={[0]}
               showsVerticalScrollIndicator={false}
+              scrollEventThrottle={16}
             >
-              {/* <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chipRow}
-              >
-                {topChips.map((chip, index) => {
-                  const active = chip === selectedChip;
-
-                  return (
-                    <Pressable
-                      key={chip}
-                      onPress={() => setSelectedChip(chip)}
-                      style={[
-                        styles.chip,
-                        index !== topChips.length - 1 && styles.chipSpacing,
-                        active ? styles.chipActive : styles.chipInactive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          active ? styles.chipTextActive : styles.chipTextInactive,
-                        ]}
-                      >
-                        {chip}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView> */}
-
+{/* 
               <View style={[styles.chipStickyHeader, styles.chipRowSection]}>
                 <ScrollView
                   horizontal
@@ -927,6 +1442,9 @@ const ParentDashboard = () => {
                           active ? styles.selectedChipMapItemActive : styles.selectedChipMapItemInactive,
                         ]}
                       >
+                        <View style={styles.selectedChipMapIconWrap}>
+                          {renderIcon(tile.kind, tile.icon, active ? '#1F1F22' : '#6A6A70', 18)}
+                        </View>
                         <Text
                           style={[
                             styles.selectedChipMapText,
@@ -937,66 +1455,151 @@ const ParentDashboard = () => {
                         >
                           {tile.label}
                         </Text>
+                        {active ? <View style={styles.selectedChipMapActiveIndicator} /> : null}
                       </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View> */}
+
+              <View style={styles.parentActionSection}>
+                <Text style={styles.parentActionTitle}>Quick Actions</Text>
+                <ScrollView
+                  horizontal
+                  nestedScrollEnabled
+                  directionalLockEnabled
+                  showsHorizontalScrollIndicator={false}
+                  decelerationRate="fast"
+                  snapToAlignment="start"
+                  snapToInterval={phoneWidth - 14}
+                  contentContainerStyle={styles.parentActionScroll}
+                >
+                  {parentActionCards.map((action, index) => {
+                    const animValue = parentActionAnimValues.current[index] || new Animated.Value(1);
+                    const imageAnimValue =
+                      parentActionImageAnimValues.current[index] || new Animated.Value(0);
+                    const imageTranslateY = imageAnimValue.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, -8],
+                    });
+                    const imageScale = imageAnimValue.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.06],
+                    });
+                    const imageRotate = imageAnimValue.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '-4deg'],
+                    });
+
+                    return (
+                      <Animated.View
+                        key={action.id}
+                        style={{
+                          opacity: animValue,
+                          transform: [
+                            {
+                              translateY: animValue.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [16, 0],
+                              }),
+                            },
+                            {
+                              scale: animValue.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.98, 1],
+                              }),
+                            },
+                          ],
+                        }}
+                      > 
+                        <Pressable
+                          onPress={() => openModule(action.route)}
+                          style={[
+                            styles.parentActionCard,
+                            { backgroundColor: action.accent },
+                            index !== parentActionCards.length - 1 && styles.parentActionCardSpacing,
+                          ]}
+                        >
+                          <View style={styles.parentActionCardBody}>
+                            <View style={styles.parentActionCardTextBlock}>
+                              <Text style={styles.parentActionCardLabel}>{action.title}</Text>
+                              <Text style={styles.parentActionCardValue} numberOfLines={1}>
+                                {action.value}
+                              </Text>
+                              <Text style={styles.parentActionCardSubtitle} numberOfLines={2}>
+                                {action.subtitle}
+                              </Text>
+                              <View style={styles.parentActionCta}>
+                                <Text style={styles.parentActionCtaText}>{action.cta}</Text>
+                              </View>
+                            </View>
+                            <Animated.Image
+                              source={action.image}
+                              style={[
+                                styles.parentActionImage,
+                                {
+                                  transform: [
+                                    { translateY: imageTranslateY },
+                                    { scale: imageScale },
+                                    { rotate: imageRotate },
+                                  ],
+                                },
+                              ]}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        </Pressable>
+                      </Animated.View>
                     );
                   })}
                 </ScrollView>
               </View>
 
-              <View style={styles.heroCard}>
-                <View style={styles.heroGlow} />
-                <Image source={heroImage} style={styles.heroImage} resizeMode="contain" />
-              </View>
-
-              <View style={{ marginBottom: 10 }}>
+              <View style={{ marginBottom: 10, paddingHorizontal: 5, paddingVertical: 5 }}>
                 <Text style={styles.sectionTitle}>Parent Dashboard</Text>
                 <Text style={{ color: '#68686D', fontSize: 13, marginTop: -6, marginBottom: 8 }}>
                   {selectedSummary}
                 </Text>
               </View>
 
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                style={styles.dashboardGridScrollArea}
-                contentContainerStyle={styles.dashboardGridScroller}
-              >
-                {visibleTileColumns.map((column, columnIndex) => (
-                  <View
-                    key={`parent-grid-column-${columnIndex}`}
+              <View style={styles.dashboardGrid}>
+                {dashboardTiles.map((tile) => (
+                  <Pressable
+                    key={tile.route}
+                    onPress={() => handleTilePress(tile.route)}
                     style={[
-                      styles.dashboardGridColumn,
-                      columnIndex !== visibleTileColumns.length - 1 &&
-                        styles.dashboardGridColumnSpacing,
+                      styles.dashboardGridCard,
+                      selectedModule === tile.route && styles.dashboardGridCardActive,
                     ]}
                   >
-                    {column.map((tile) => (
-                      <Pressable
-                        key={tile.route}
-                        style={[
-                          styles.dashboardGridCard,
-                          selectedModule === tile.route && styles.dashboardGridCardActive,
-                        ]}
-                        onPress={() => handleTilePress(tile.route)}
-                      >
-                        <View style={styles.gridIconWrap}>
-                          {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
-                        </View>
-                        <Text style={styles.gridLabel}>{tile.label}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                    <View style={styles.dashboardGridCornerAccent} />
+                    <View style={styles.gridIconWrap}>
+                      {renderIcon(tile.kind, tile.icon, '#000000', 24)}
+                    </View>
+                    <View style={styles.dashboardGridCardContent}>
+                      <View style={styles.dashboardGridTextBlock}>
+                        <Text style={styles.gridLabel} numberOfLines={2}>
+                          {tile.label}
+                        </Text>
+                        <Text style={styles.dashboardGridMetaLabel} numberOfLines={1}>
+                          {tile.metaLabel}
+                        </Text>
+                        <Text style={styles.dashboardGridMetaValue} numberOfLines={1}>
+                          {tile.metaValue}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
                 ))}
-              </ScrollView>
-              <ScrollView
+              </View>
+
+              {/* <ScrollView
                 nestedScrollEnabled
                 showsVerticalScrollIndicator={false}
                 style={{ maxHeight: Math.max(phoneHeight * 0.24, 180) }}
                 contentContainerStyle={{ paddingBottom: 24 }}
               >
-                <View style={styles.statusCardsRow}>
+                <View style={[styles.statusCardsRow, { paddingHorizontal: 5 }]}>
                   <View
                     style={[
                       styles.statusCard,
@@ -1032,7 +1635,7 @@ const ParentDashboard = () => {
                       </Pressable>
                     </ScrollView>
                     <View style={styles.statusIconWrap}>
-                      <MaterialIcons name="school" size={30} color="#4C4C4C" />
+                      <MaterialIcons name="school" size={30} color="#000000" />
                     </View>
                   </View>
 
@@ -1046,39 +1649,38 @@ const ParentDashboard = () => {
                       sectionPositions.current.ParentFees = event.nativeEvent.layout.y;
                     }}
                   >
-                  <ScrollView
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
-                    style={styles.statusCardTextScroll}
-                    contentContainerStyle={styles.statusCardTextScrollContent}
-                  >
-                    <View style={styles.statusTitleRow}>
-                      <Text style={styles.statusNumber} numberOfLines={1} ellipsizeMode="tail">
-                        Fees
-                      </Text>
-                      <Text style={styles.statusSubtitle} numberOfLines={1} ellipsizeMode="tail">
-                        Summary
-                      </Text>
-                    </View>
-                    <Text style={styles.statusFooter} numberOfLines={1} ellipsizeMode="tail">
-                      {feeSummary.due}
-                    </Text>
-                    <Pressable
-                      onPress={() => openModule('ParentFees')}
-                      style={styles.statusActionButton}
+                    <ScrollView
+                      nestedScrollEnabled
+                      showsVerticalScrollIndicator={false}
+                      style={styles.statusCardTextScroll}
+                      contentContainerStyle={styles.statusCardTextScrollContent}
                     >
-                      <Text style={styles.statusActionLink}>Open Fees</Text>
-                    </Pressable>
-                  </ScrollView>
-                  <View style={styles.statusIconWrap}>
-                    <MaterialIcons name="payments" size={30} color="#4C4C4C" />
-                  </View>
+                      <View style={styles.statusTitleRow}>
+                        <Text style={styles.statusNumber} numberOfLines={1} ellipsizeMode="tail">
+                          Fees
+                        </Text>
+                        <Text style={styles.statusSubtitle} numberOfLines={1} ellipsizeMode="tail">
+                          Summary
+                        </Text>
+                      </View>
+                      <Text style={styles.statusFooter} numberOfLines={1} ellipsizeMode="tail">
+                        {feeSummary.due}
+                      </Text>
+                      <Pressable
+                        onPress={() => openModule('ParentFees')}
+                        style={styles.statusActionButton}
+                      >
+                        <Text style={styles.statusActionLink}>Open Fees</Text>
+                      </Pressable>
+                    </ScrollView>
+                    <View style={styles.statusIconWrap}>
+                      <MaterialIcons name="payments" size={30} color="#000000" />
+                    </View>
                   </View>
                 </View>
-              </ScrollView>
+              </ScrollView> */}
 
-
-              <View
+              {/* <View
                 onLayout={(event) => {
                   sectionPositions.current.ParentAcademic = event.nativeEvent.layout.y;
                 }}
@@ -1091,7 +1693,6 @@ const ParentDashboard = () => {
                         Student marks, grades and performance.
                       </Text>
                     </View>
-                   
                   </View>
                 </View>
                 <ParentAcademicView embedded />
@@ -1110,7 +1711,6 @@ const ParentDashboard = () => {
                         Fee totals, breakdown and installments.
                       </Text>
                     </View>
-                   
                   </View>
                 </View>
                 <ParentFeesView embedded />
@@ -1125,9 +1725,7 @@ const ParentDashboard = () => {
                   <View style={styles.moduleHeaderTopRow}>
                     <View style={styles.moduleHeaderTextBlock}>
                       <Text style={styles.moduleHeaderTitle}>Homework</Text>
-                      
                     </View>
-                 
                   </View>
                 </View>
                 <ParentHomeworkView embedded />
@@ -1146,7 +1744,6 @@ const ParentDashboard = () => {
                         Daily class routine and periods.
                       </Text>
                     </View>
-                    
                   </View>
                 </View>
                 <ParentTimetableView embedded />
@@ -1165,7 +1762,6 @@ const ParentDashboard = () => {
                         Events, holidays and school timeline.
                       </Text>
                     </View>
-                  
                   </View>
                 </View>
                 <ParentCalenderView embedded />
@@ -1184,7 +1780,6 @@ const ParentDashboard = () => {
                         Gallery and school media updates.
                       </Text>
                     </View>
-                  
                   </View>
                 </View>
                 <ParentPhotosView embedded />
@@ -1203,32 +1798,11 @@ const ParentDashboard = () => {
                         Messages and support requests.
                       </Text>
                     </View>
-                   
                   </View>
                 </View>
                 <ParentLiveChatTicketView embedded />
-              </View>
-{/* 
-              <View
-                onLayout={(event) => {
-                  sectionPositions.current.ParentHomepage = event.nativeEvent.layout.y;
-                }}
-              >
-                <View style={styles.moduleHeaderCard}>
-                  <View style={styles.moduleHeaderTopRow}>
-                    <View style={styles.moduleHeaderTextBlock}>
-                      <Text style={styles.moduleHeaderTitle}>Announcements</Text>
-                      <Text style={styles.moduleHeaderSubtitle}>
-                        School notices and highlights.
-                      </Text>
-                    </View>
-                    <View style={styles.moduleHeaderBadge}>
-                      <Text style={styles.moduleHeaderBadgeText}>AN</Text>
-                    </View>
-                  </View>
-                </View>
-                <ParentHomepageView />
               </View> */}
+
             </ScrollView>
 
             <View style={styles.footer}>
@@ -1238,18 +1812,18 @@ const ParentDashboard = () => {
                   <Text style={styles.footerNavLabel}>Back</Text>
                 </Pressable>
                 <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
-                  <MaterialIcons name="home" size={22} color="#1F1F22" />
+                  <MaterialIcons name="home" size={22} color="#000000" />
                   <Text style={styles.footerNavLabel}>Home</Text>
                 </Pressable>
                 <Pressable style={styles.footerAddButton} onPress={handleAddPress}>
                   <MaterialIcons name="add" size={26} color="#FFFFFF" />
                 </Pressable>
                 <Pressable style={styles.footerNavItem} onPress={handleOpenChat}>
-                  <MaterialIcons name="chat-bubble-outline" size={22} color="#C2C2C7" />
+                  <MaterialIcons name="chat-bubble-outline" size={22} color="#000000" />
                   <Text style={styles.footerNavLabelMuted}>Chat</Text>
                 </Pressable>
                 <Pressable style={styles.footerNavItem} onPress={handleOpenProfilePanel}>
-                  <MaterialIcons name="person-outline" size={22} color="#C2C2C7" />
+                  <MaterialIcons name="person-outline" size={22} color="#000000" />
                   <Text style={styles.footerNavLabelMuted}>Profile</Text>
                 </Pressable>
               </View>
@@ -1259,7 +1833,6 @@ const ParentDashboard = () => {
                 <Image source={logoImage} style={styles.logo} resizeMode="contain" />
               </View>
 
-              <View style={styles.homeIndicator} />
             </View>
           </View>
         </View>
@@ -1278,11 +1851,24 @@ const ParentDashboard = () => {
             >
               <View style={styles.teacherHeaderRow}>
                 <View style={styles.teacherAvatar}>
-                  {studentProfile?.photoUrl ? (
+                  {resolveRenderablePhotoUri(studentProfile?.photoUrl || studentProfile?.photo || '') ? (
                     <Image
-                      source={{ uri: studentProfile.photoUrl }}
+                      source={{ uri: resolveRenderablePhotoUri(studentProfile?.photoUrl || studentProfile?.photo || '') }}
                       style={{ width: '100%', height: '100%', borderRadius: 26 }}
                       resizeMode="cover"
+                      onLoad={() => {
+                        console.log('[ParentDashboard] profile photo loaded', {
+                          uri: resolveRenderablePhotoUri(studentProfile?.photoUrl || studentProfile?.photo || ''),
+                          name: studentProfile?.name || null,
+                        });
+                      }}
+                      onError={(event) => {
+                        console.log('[ParentDashboard] profile photo failed', {
+                          uri: resolveRenderablePhotoUri(studentProfile?.photoUrl || studentProfile?.photo || ''),
+                          name: studentProfile?.name || null,
+                          error: event?.nativeEvent?.error || null,
+                        });
+                      }}
                     />
                   ) : (
                     <Text style={styles.teacherAvatarText}>
@@ -1313,6 +1899,8 @@ const ParentDashboard = () => {
                       </Text>
                     </View>
                   </View>
+
+       
 
                   <View style={[styles.teacherDetailsList, { marginBottom: 8 }]}>
                     <Text style={styles.teacherTitle}>Switch Student</Text>
@@ -1396,6 +1984,85 @@ const ParentDashboard = () => {
                   </View>
                 </>
               )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showAttendanceModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAttendanceModal(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.teacherPopupCard}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 2 }}
+            >
+              <View style={styles.teacherHeaderRow}>
+                <View style={styles.teacherAvatar}>
+                  <MaterialIcons name="event-note" size={28} color="#fff" />
+                </View>
+                <View style={styles.teacherHeaderText}>
+                  <Text style={styles.teacherTitle}>Attendance</Text>
+                  <Text style={styles.teacherSubtitle}>
+                    Leave summary for {activeStudentName}
+                  </Text>
+                </View>
+              </View>
+
+              {attendanceChartData ? (
+                <BarChart
+                  data={attendanceChartData}
+                  width={Math.max(phoneWidth - 80, 250)}
+                  height={220}
+                  fromZero
+                  showValuesOnTopOfBars
+                  withInnerLines={false}
+                  withOuterLines
+                  segments={4}
+                  chartConfig={{
+                    backgroundColor: '#FFFFFF',
+                    backgroundGradientFrom: '#FFFFFF',
+                    backgroundGradientTo: '#FFFFFF',
+                    decimalPlaces: 0,
+                    color: (opacity = 1) => `rgba(13, 63, 102, ${opacity})`,
+                    labelColor: () => '#111',
+                    propsForBackgroundLines: {
+                      stroke: '#E9E9EE',
+                      strokeDasharray: '',
+                    },
+                    propsForBarLabels: {
+                      fill: '#111',
+                    },
+                  }}
+                  style={{ borderRadius: 14, marginVertical: 8 }}
+                />
+              ) : (
+                <Text style={styles.teacherSubtitle}>
+                  No attendance/leave data found for this student.
+                </Text>
+              )}
+
+              <View style={styles.teacherDetailsList}>
+                <View style={styles.teacherDetailRow}>
+                  <Text style={styles.teacherDetailLabel}>Leave Records</Text>
+                  <Text style={styles.teacherDetailValue}>{attendanceCount}</Text>
+                </View>
+              </View>
+
+              <View style={styles.teacherActions}>
+                <Pressable
+                  style={[styles.popupButton, styles.popupButtonSecondary, styles.teacherActionButton]}
+                  onPress={() => setShowAttendanceModal(false)}
+                >
+                  <Text style={[styles.popupButtonText, styles.popupButtonTextSecondary]}>
+                    Close
+                  </Text>
+                </Pressable>
+              </View>
             </ScrollView>
           </View>
         </View>

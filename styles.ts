@@ -680,6 +680,7 @@ export const globalStyles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
+    marginTop:60,
   },
   headerText: {
     fontSize: scaleFont(18),
@@ -1041,7 +1042,7 @@ export const globalStyles = StyleSheet.create({
     backgroundColor: '#f6f6f7',
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#f6f6f7',
     marginTop: hp('4%'),
     paddingTop: hp('2%'),
 
@@ -1053,7 +1054,7 @@ export const globalStyles = StyleSheet.create({
     backgroundColor: '#f6f6f7',
     borderRadius: 30,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#f6f6f7',
     marginTop: hp('4%'),  
     paddingTop: hp('2%'),
 
@@ -1307,7 +1308,7 @@ export const globalStyles = StyleSheet.create({
     fontSize: scaleFont(15),
     fontWeight: 'bold',
     textAlign: 'right',
-    marginTop: -5,
+    marginTop: 15,
   },
   bigNum: {
     fontSize: scaleFont(30),

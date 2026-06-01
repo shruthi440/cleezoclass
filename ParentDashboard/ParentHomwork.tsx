@@ -138,6 +138,8 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
   const [timetable, setTimetable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { showError } = useContext(ErrorContext);
+  const { width } = useWindowDimensions();
+  const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
 
   /* ================= FETCH ================= */
   useEffect(() => {
