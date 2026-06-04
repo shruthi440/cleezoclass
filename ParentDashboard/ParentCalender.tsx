@@ -416,65 +416,53 @@ const CalendarView: React.FC<{ studentData: any; appStyles: any }> = ({ studentD
       </LinearGradient>
 
       <View style={calendarStyles.summaryRow}>
-        <View
-          style={[
-            appStyles.dashboardGridCard,
-            calendarStyles.summaryCardLeft,
-          ]}
+        <LinearGradient
+          colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+          start={{ x: 0.05, y: 0.05 }}
+          end={{ x: 0.95, y: 0.95 }}
+          style={[appStyles.dashboardGridCard, calendarStyles.summaryCardLeft]}
         >
-          <View style={appStyles.dashboardGridCornerAccent} />
-         
+          <View style={calendarStyles.summaryGradientTopRightIcon}>
+            <MaterialIcons name="event" size={24} color="#FFFFFF" />
+          </View>
           <View style={calendarStyles.summaryCardContent}>
-            <Text style={calendarStyles.summaryCardLabel}>Events</Text>
-            <Text style={calendarStyles.summaryCardValue}>{upcomingEvents.length}</Text>
-            <Text style={calendarStyles.summaryCardText}>
+            <Text style={[calendarStyles.summaryCardLabel, calendarStyles.summaryCardLabelLight]}>Events</Text>
+            <Text style={[calendarStyles.summaryCardValue, calendarStyles.summaryCardValueLight]}>
+              {upcomingEvents.length}
+            </Text>
+            <Text style={[calendarStyles.summaryCardText, calendarStyles.summaryCardTextLight]}>
               {upcomingEvents[0]
                 ? `${formatCalendarDateLabel(upcomingEvents[0].date)} • ${upcomingEvents[0].title}`
                 : 'No upcoming events'}
             </Text>
-            <Pressable
-              onPress={() => {
-                setSelectedEvent(null);
-                setSelectedDateLabel('Upcoming Events');
-                setSelectedDayItems(upcomingEvents);
-                setModalVisible(true);
-              }}
-              style={calendarStyles.summaryActionButton}
-            >
-              <Text style={calendarStyles.summaryActionText}>View</Text>
-            </Pressable>
+            
           </View>
-        </View>
+        </LinearGradient>
 
-        <View
-          style={[
-            appStyles.dashboardGridCard,
-            calendarStyles.summaryCardRight,
-          ]}
+        <LinearGradient
+          colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+          start={{ x: 0.05, y: 0.05 }}
+          end={{ x: 0.95, y: 0.95 }}
+          style={[appStyles.dashboardGridCard, calendarStyles.summaryCardRight]}
         >
-          <View style={appStyles.dashboardGridCornerAccent} />
-         
+          <View style={calendarStyles.summaryGradientTopRightIcon}>
+            <MaterialIcons name="event-note" size={24} color="#FFFFFF" />
+          </View>
           <View style={calendarStyles.summaryCardContent}>
-            <Text style={calendarStyles.summaryCardLabel}>Extra Classes</Text>
-            <Text style={calendarStyles.summaryCardValue}>{upcomingExtraClasses.length}</Text>
-            <Text style={calendarStyles.summaryCardText}>
+            <Text style={[calendarStyles.summaryCardLabel, calendarStyles.summaryCardLabelLight]}>
+              Extra Classes
+            </Text>
+            <Text style={[calendarStyles.summaryCardValue, calendarStyles.summaryCardValueLight]}>
+              {upcomingExtraClasses.length}
+            </Text>
+            <Text style={[calendarStyles.summaryCardText, calendarStyles.summaryCardTextLight]}>
               {upcomingExtraClasses.length > 0
                 ? `${upcomingExtraClasses.length} upcoming`
                 : 'No upcoming extra classes'}
             </Text>
-            <Pressable
-              onPress={() => {
-                setSelectedEvent(null);
-                setSelectedDateLabel('Upcoming Extra Classes');
-                setSelectedDayItems(extraClassSummaryItems);
-                setModalVisible(true);
-              }}
-              style={calendarStyles.summaryActionButton}
-            >
-              <Text style={calendarStyles.summaryActionText}>View</Text>
-            </Pressable>
+           
           </View>
-        </View>
+        </LinearGradient>
       </View>
 
       <View style={styles.calendarContainer}>
@@ -710,6 +698,26 @@ const calendarStyles = StyleSheet.create({
     textAlign: 'right',
     fontWeight: '600',
     marginBottom: 10,
+  },
+  summaryGradientTopRightIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  summaryCardLabelLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardValueLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardTextLight: {
+    color: 'rgba(255,255,255,0.84)',
   },
   summaryActionButton: {
     backgroundColor: '#404040',

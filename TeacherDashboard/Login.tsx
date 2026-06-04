@@ -36,6 +36,8 @@ type RootStackParamList = {
   ParentDetails: { username: string; name: string };
   TeacherDashboard: { username: string; name: string };
   BusManagerDashboard: undefined;
+  BusDashboard: undefined;
+  BusDriverDashboard: undefined;
 };
 
 const TeacherLogin: React.FC = () => {
@@ -123,11 +125,13 @@ const { showError } = useContext(ErrorContext);
       const isAccountantRole = userType === 'management' && designation === 'accountant';
       const isBusManagerRole =
         userType === 'management' && (designation === 'bus manager' || designation === 'busmanager');
+      const isBusDriverRole =
+        designation === 'bus driver' || designation === 'busdriver' || designation === 'driver';
       const isChiefRole = userType === 'management' && designation === 'superadmin';
 
       if (storedUser && userType) {
         if (userType === 'teacher') {
-          const teacherScreen: 'TeacherAdmissionDashboard' | 'TeacherDashboard' =
+          const teacherScreen: 'TeacherDashboard' | 'TeacherAdmissionDashboard' =
             lastScreen === 'TeacherDashboard'
               ? 'TeacherDashboard'
               : 'TeacherDashboard';
@@ -165,7 +169,15 @@ const { showError } = useContext(ErrorContext);
         if (isBusManagerRole) {
           navigation.reset({
             index: 0,
-            routes: [{ name: 'BusManagerDashboard' }],
+            routes: [{ name: 'BusDashboard' }],
+          });
+          return;
+        }
+
+        if (isBusDriverRole) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'BusDriverDashboard' }],
           });
           return;
         }
@@ -258,20 +270,24 @@ const { showError } = useContext(ErrorContext);
       const isBusManagerRole =
         data.userType === 'management' &&
         designationKey === 'busmanager';
+      const isBusDriverRole = designationKey === 'busdriver' || designationKey === 'driver';
       const isChiefRole = data.userType === 'management' && designationKey === 'superadmin';
-      const nextScreen = data.userType === 'teacher'
-        ? 'TeacherDashboard'
-        : data.userType === 'student'
-          ? 'ParentDetails'
-          : isChiefRole
-            ? 'ChiefDashboard'
-            : isAccountantRole
-              ? 'AccountantDashboard'
-              : isBusManagerRole
-                ? 'BusManagerDashboard'
-              : isAdminRole
-                ? 'AdminDashboard'
-                : 'TeacherDashboard';
+      let nextScreen: string = 'TeacherDashboard';
+      if (data.userType === 'student') {
+        nextScreen = 'ParentDetails';
+      } else if (isChiefRole) {
+        nextScreen = 'ChiefDashboard';
+      } else if (isAccountantRole) {
+        nextScreen = 'AccountantDashboard';
+      } else if (isBusManagerRole) {
+        nextScreen = 'BusDashboard';
+      } else if (isBusDriverRole) {
+        nextScreen = 'BusDriverDashboard';
+      } else if (isAdminRole) {
+        nextScreen = 'AdminDashboard';
+      } else if (data.userType === 'teacher') {
+        nextScreen = 'TeacherDashboard';
+      }
 
       await AsyncStorage.multiSet([
         ['userType', data.userType],
@@ -300,7 +316,7 @@ const { showError } = useContext(ErrorContext);
           );
         }
 
-        navigation.replace('TeacherAdmissionDashboard', { username, name: data.name });
+        navigation.replace('TeacherDashboard', { username, name: data.name });
       } else if (data.userType === 'student') {
         navigation.replace('ParentDetails', { username, name: data.name });
       } else if (isChiefRole) {
@@ -308,7 +324,9 @@ const { showError } = useContext(ErrorContext);
       } else if (isAccountantRole) {
         navigation.replace('AccountantDashboard', { username, name: data.name });
       } else if (isBusManagerRole) {
-        navigation.replace('BusManagerDashboard');
+        navigation.replace('BusDashboard');
+      } else if (isBusDriverRole) {
+        navigation.replace('BusDriverDashboard');
       } else if ((data.userType === 'management' || data.userType === 'marketing') && isAdminRole) {
         navigation.replace('AdminDashboard');
       } else {

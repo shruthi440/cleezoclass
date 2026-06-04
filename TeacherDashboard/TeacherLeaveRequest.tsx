@@ -20,7 +20,9 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ThemeContext } from '../ThemeContext';
+import TeacherFooter from './TeacherFooter';
 import { globalStyles as styles } from '../teacherStyles';
+import TeacherSummaryCard from './TeacherSummaryCard';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as DocumentPicker from '@react-native-documents/picker';
@@ -420,19 +422,18 @@ const { fullTimetable, refreshNextClass } = useNextClass();
         <View style={ui.container}>
           <View style={ui.summaryGrid}>
             {summaryCards.map((card, index) => (
-              <TouchableOpacity
+              <TeacherSummaryCard
                 key={card.label}
                 style={[
-                  ui.summaryCard,
                   index === 0 ? ui.summaryCardLeft : ui.summaryCardRight,
+                  { width: '48%' },
                 ]}
                 onPress={() => setActiveTab(index === 0 ? 'self' : 'student')}
- n              >
+              >
                 <Text style={ui.summaryLabel}>{card.label}</Text>
                 <Text style={ui.summaryAmount}>{card.value}</Text>
-                <View style={ui.summaryDivider} />
                 <Text style={ui.summaryFooter}>{card.footer}</Text>
-              </TouchableOpacity>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -464,21 +465,21 @@ const { fullTimetable, refreshNextClass } = useNextClass();
               </View>
               <View style={ui.dateRow}>
                 <TextInput
-                  style={ui.reasonInput}
+                  style={ui.inputPill}
                   placeholder="Reason"
                   placeholderTextColor="#9CA3AF"
                   value={reason}
                   onChangeText={setReason}
                   multiline
                 />
-                <TouchableOpacity style={ui.uploadPill} onPress={pickDocument}>
+                <TouchableOpacity style={ui.inputPill} onPress={pickDocument}>
                   <Text style={ui.uploadPillText} numberOfLines={1}>
                     {leaveLetter ? leaveLetter.name : 'Upload'}
                   </Text>
                 </TouchableOpacity>
               </View>
               <TouchableOpacity style={ui.submitButton} onPress={handleSubmission} disabled={submitting}>
-                <Image source={sendIcon} style={[styles.iconImage,{marginTop: 5}, { tintColor: '#0a3d62' }]} />
+                <Image source={sendIcon} style={[styles.iconImage,{marginTop: 10}, { tintColor: '#0a3d62' }]} />
                 <Text style={ui.submitButtonText}>{submitting ? 'Submitting...' : ''}</Text>
               </TouchableOpacity>
             </View>
@@ -644,7 +645,8 @@ const { fullTimetable, refreshNextClass } = useNextClass();
       </TouchableOpacity>
     </View>
   </View>
-</Modal>
+      </Modal>
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -737,29 +739,38 @@ const ui = StyleSheet.create({
   summaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 40,
   },
   summaryCard: {
     width: '48%',
-    minHeight: 108,
+    minHeight: 92,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#E1E4EA',
     borderRadius: 14,
-    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
     paddingVertical: 14,
     marginBottom: 10,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  summaryCardLeft: { backgroundColor: '#D7E8C9', marginRight: 8 },
-  summaryCardRight: { backgroundColor: '#F2EE9E', marginLeft: 8 },
+  summaryCardLeft: { backgroundColor: '#FFFFFF', marginRight: 8 },
+  summaryCardRight: { backgroundColor: '#FFFFFF', marginLeft: 8 },
   summaryLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#000',
     fontWeight: '700',
   },
   summaryAmount: {
     marginTop: 6,
     fontSize: 18,
-    color: '#111',
+    color: '#000',
     fontWeight: '800',
   },
   summaryDivider: {
@@ -768,7 +779,7 @@ const ui = StyleSheet.create({
     marginVertical: 10,
   },
   summaryFooter: {
-    color: '#666',
+    color: '#000',
     fontSize: 12,
     lineHeight: 16,
   },

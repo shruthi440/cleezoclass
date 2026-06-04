@@ -17,6 +17,7 @@ import { DataTable } from 'react-native-paper';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../ThemeContext';
+import TeacherSummaryCard from './TeacherSummaryCard';
 import { globalStyles as styles } from '../teacherStyles';
 import {
   timetableStyles as ui,
@@ -349,7 +350,7 @@ const Teachertimetable: React.FC<TeachertimetableProps> = ({ navigation, inlineP
           borderRightColor: TABLE_BORDER_COLOR,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: isHeader ? '#5A7488' : '#fff',
+          backgroundColor: isHeader ? '#a174eb' : '#fff',
         }}
       >
         {content}
@@ -398,7 +399,7 @@ const Teachertimetable: React.FC<TeachertimetableProps> = ({ navigation, inlineP
                       borderRightColor: TABLE_BORDER_COLOR,
                       justifyContent: 'center',
                       alignItems: 'center',
-                      backgroundColor: '#5A7488',
+                      backgroundColor: '#a174eb',
                     }}
                   >
                     <Text style={{ color: '#F2F2F2', fontWeight: 'bold', fontSize: 10, textAlign: 'center' }}>
@@ -554,7 +555,7 @@ const Teachertimetable: React.FC<TeachertimetableProps> = ({ navigation, inlineP
           borderRightColor: TABLE_BORDER_COLOR,
           justifyContent: 'center',
           alignItems: 'center',
-          backgroundColor: isHeader ? '#5A7488' : '#fff',
+          backgroundColor: isHeader ? '#a174eb' : '#fff',
         }}
       >
         {content}
@@ -763,7 +764,7 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
       <StatusBar barStyle="dark-content" />
       <ScrollView style={styles.scrollView} contentContainerStyle={ui.page}>
         <View style={ttStyles.summaryRow}>
-          <View style={[ttStyles.summaryCard, ttStyles.summaryCardLeft]}>
+          <TeacherSummaryCard style={[ttStyles.summaryCard, ttStyles.summaryCardLeft]}>
             <Text style={ttStyles.summaryLabel}>Next Class</Text>
             <Text style={ttStyles.summaryTitle}>
               {timetableSummary.next ? timetableSummary.next.subject : 'No class'}
@@ -773,9 +774,9 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
                 ? `${timetableSummary.next.day} • ${timetableSummary.next.fromTime} - ${timetableSummary.next.toTime}`
                 : 'No upcoming class found'}
             </Text>
-          </View>
+          </TeacherSummaryCard>
 
-          <View style={[ttStyles.summaryCard, ttStyles.summaryCardRight]}>
+          <TeacherSummaryCard style={[ttStyles.summaryCard, ttStyles.summaryCardRight]}>
             <Text style={ttStyles.summaryLabel}>Upcoming Class</Text>
             <Text style={ttStyles.summaryTitle}>
               {timetableSummary.upcoming ? timetableSummary.upcoming.subject : 'No class'}
@@ -785,7 +786,7 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
                 ? `${timetableSummary.upcoming.day} • ${timetableSummary.upcoming.fromTime} - ${timetableSummary.upcoming.toTime}`
                 : 'No more classes'}
             </Text>
-          </View>
+          </TeacherSummaryCard>
         </View>
 
         <View style={ui.card}>
@@ -911,41 +912,44 @@ const ttStyles = {
   },
   summaryCard: {
     flex: 1,
-    minHeight: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#E1E4EA',
+    backgroundColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
     justifyContent: 'space-between' as const,
     alignItems: 'flex-start' as const,
+    overflow: 'hidden' as const,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 3,
+    marginTop:60
   },
   summaryCardLeft: {
-    backgroundColor: '#D7E8C9',
+    backgroundColor: 'transparent',
   },
   summaryCardRight: {
-    backgroundColor: '#F2EE9E',
+    backgroundColor: 'transparent',
   },
   summaryLabel: {
     fontSize: 12.5,
     fontWeight: '700' as const,
-    color: '#222222',
+    color: '#fff',
     marginBottom: 2,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '900' as const,
-    color: '#111111',
+    color: '#fff',
     marginBottom: 4,
   },
   summaryMeta: {
     fontSize: 12.5,
     fontWeight: '500' as const,
-    color: '#2B2B2B',
+    color: '#fff',
   },
 };

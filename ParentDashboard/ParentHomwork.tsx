@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../ThemeContext';
 import { globalStyles as styles } from '../inner';
 import { createAppStyles } from '../App.styles';
+import ParentFooter from './ParentFooter';
 
 import axios from 'axios';
 import { ErrorContext } from '../ErrorContext';
@@ -373,6 +374,7 @@ const ParentHomework: React.FC<
      
         </View>
       </ScrollView>
+      <ParentFooter embedded={embedded} />
    
     </SafeAreaView>
   );

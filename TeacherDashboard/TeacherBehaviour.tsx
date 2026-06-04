@@ -22,6 +22,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import ticketIcon from '../icons/application.png';
 import { ThemeContext } from '../ThemeContext';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 import {
   globalStyles as styles,
   behaviorStyles as ui,
@@ -387,31 +389,30 @@ const availableSections = classSelected
       >
         <View style={local.summaryRow}>
           {summaryCards.map((card, index) => (
-            <View
+            <TeacherSummaryCard
               key={`${card.title}-${index}`}
               style={[
-                local.summaryCard,
                 index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-                { backgroundColor: card.background },
+                { flex: 1 },
               ]}
-              >
-                <View style={local.summaryText}>
-                  <View style={local.summaryTitleRow}>
-                    <Text style={local.summaryNumber} numberOfLines={1} ellipsizeMode="tail">
-                      {card.title}
-                    </Text>
-                    <Text style={local.summarySubtitle} numberOfLines={1} ellipsizeMode="tail">
-                      {card.subtitle}
-                    </Text>
-                  </View>
-                  <Text style={local.summaryFooter} numberOfLines={2} ellipsizeMode="tail">
-                    {card.footer}
+            >
+              <View style={local.summaryText}>
+                <View style={local.summaryTitleRow}>
+                  <Text style={local.summaryNumber} numberOfLines={1} ellipsizeMode="tail">
+                    {card.title}
+                  </Text>
+                  <Text style={local.summarySubtitle} numberOfLines={1} ellipsizeMode="tail">
+                    {card.subtitle}
                   </Text>
                 </View>
+                <Text style={local.summaryFooter} numberOfLines={2} ellipsizeMode="tail">
+                  {card.footer}
+                </Text>
+              </View>
               <View style={local.summaryIconWrap}>
                 <Ionicons name={card.icon} size={28} color="#4C4C4C" />
               </View>
-            </View>
+            </TeacherSummaryCard>
           ))}
         </View>
 
@@ -616,6 +617,7 @@ const availableSections = classSelected
         </TouchableWithoutFeedback>
       </Modal>
 
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -626,23 +628,27 @@ const local = {
   summaryRow: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
+    marginTop: 60,
     marginBottom: 12,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E1E4EA',
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     alignItems: 'flex-start' as const,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 3,
   },
   summaryCardLeft: {
     marginRight: 4,

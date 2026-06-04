@@ -24,6 +24,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 type ScanData = {
   name: string;
@@ -456,12 +458,11 @@ const HandwritingScanPull: React.FC = () => {
         <View style={styles.container}>
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${card.subtitle}-${index}`}
                 style={[
                   local.summaryCard,
                   index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-                  { backgroundColor: card.background },
                 ]}
               >
                 <View style={local.summaryText}>
@@ -480,7 +481,7 @@ const HandwritingScanPull: React.FC = () => {
                 <View style={local.summaryIconWrap}>
                   <Ionicons name={card.icon as any} size={28} color="#4C4C4C" />
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
           <View style={[styles.syllabusContainer4]}>
@@ -489,14 +490,13 @@ const HandwritingScanPull: React.FC = () => {
                 style={[styles.submitBtn1,{marginTop:10}]}
                 onPress={() => setActiveTab('scan')}
               >
-                <Text style={styles.submitBtnText}>Scan</Text>
+                <Text style={styles.submitBtnText}>Upload marks</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitBtn1,{marginTop:10}]}
                 onPress={() => setActiveTab('pull')}
               >
-                <Text style={styles.submitBtnText}>Pull</Text>
-              </TouchableOpacity>
+<Text style={styles.submitBtnText}>Marks Retrieval</Text>              </TouchableOpacity>
             </View>
 
             {activeTab === 'scan' && (
@@ -719,6 +719,7 @@ const HandwritingScanPull: React.FC = () => {
         </View>
       </Modal>
 
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -737,24 +738,18 @@ const local = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginHorizontal: 12,
-    marginTop: 6,
+    marginTop: 40,
     marginBottom: 8,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   summaryCardLeft: {
     marginRight: 4,

@@ -18,7 +18,9 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 import { createAppStyles } from '../App.styles';
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
+import TeacherFooter from './TeacherFooter';
 import { RootStackParamList } from '../types';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 type SummaryRouteParams = {
   username?: string;
@@ -302,12 +304,11 @@ const TeacherModuleSummary = () => {
         >
           <View style={localStyles.cardsRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${selectedModule}-${card.subtitle}-${index}`}
                 style={[
                   localStyles.summaryCard,
                   index === 0 ? localStyles.summaryCardLeft : localStyles.summaryCardRight,
-                  { backgroundColor: card.background },
                 ]}
               >
                 <View style={localStyles.cardText}>
@@ -326,11 +327,12 @@ const TeacherModuleSummary = () => {
                 <View style={localStyles.statusIconWrap}>
                   {renderIcon(card.kind, card.icon, '#4C4C4C', 30)}
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
         </ScrollView>
       </View>
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -443,22 +445,18 @@ const localStyles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
+    marginTop: 40,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    overflow: 'visible',
   },
   summaryCardLeft: {
     marginRight: 4,

@@ -23,6 +23,7 @@ import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeContext } from '../ThemeContext';
+import TeacherFooter from './TeacherFooter';
 
 /* ---------------- TYPES ---------------- */
 
@@ -283,6 +284,7 @@ const pickImage = async () => {
         onConfirm={handleConfirm}
         onCancel={() => setShowDatePicker(false)}
       />
+      <TeacherFooter />
     </View>
   );
 };

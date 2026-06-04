@@ -38,6 +38,7 @@ import Svg, {
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import ChiefFooterProfile from './ChiefFooterProfile';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -58,7 +59,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scaleFont = (size: number) => (SCREEN_WIDTH / 375) * size;
 const FIXED_CARD_WIDTH = SCREEN_WIDTH * 0.92;
 const backArrowImage = require('../assets/Arrow.png');
-const chiefGradientColors = ['#F4ECFF', '#DDCBFF', '#C6B0FF'];
+const chiefGradientColors =  ['#F4ECFF', '#DDCBFF', '#C6B0FF'];
 
 const COLORS = {
   primary: '#f0f0f0',
@@ -581,7 +582,8 @@ type ChiefSectionKey =
   | 'AcademicStudent'
   | 'AcademicTeacher'
   | 'ExamManagement'
-  | 'Meetings';
+  | 'Meetings'
+  | 'ChiefAnnouncements';
 
 // ------------------- Dashboard Card -------------------
 const DashboardCard = ({
@@ -862,6 +864,12 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
       imageHeight: SCREEN_HEIGHT * 0.29,
       imageWidth: SCREEN_WIDTH * 0.65,
     },
+    {
+      title: 'Announcements',
+      image: require('../assets/chat.png'),
+      imageHeight: SCREEN_HEIGHT * 0.29,
+      imageWidth: SCREEN_WIDTH * 0.65,
+    },
   ];
   const chiefTiles = [
     {
@@ -891,6 +899,13 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
       icon: 'chat',
       gradientColors: ['#EEE8FF', '#C7B8FF'],
       sectionKey: 'Meetings' as ChiefSectionKey,
+    },
+    {
+      label: 'Announcements',
+      title: 'Announcements',
+      icon: 'campaign',
+      gradientColors: ['#EEE8FF', '#C7B8FF'],
+      sectionKey: 'ChiefAnnouncements' as ChiefSectionKey,
     },
   ];
 
@@ -2830,7 +2845,7 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                 style={[appStyles.footerNavItem, styles.footerNavItemRight]}
                 onPress={handleOpenProfilePanel}
               >
-                <Ionicons name="person-outline" size={18} color="#B0B0B5" />
+                <ChiefFooterProfile />
                 <Text style={appStyles.footerNavLabelMuted}>Profile</Text>
               </Pressable>
             </View>

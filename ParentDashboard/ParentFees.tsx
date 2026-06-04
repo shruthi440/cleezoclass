@@ -127,10 +127,17 @@ const mergeFeeData = (classFeeData: Record<string, any> | null, studentFeeData: 
   return merged;
 };
 
+const isStudentScopedFee = (scope?: string) =>
+  /student|individual|personal|per\s*student/i.test(String(scope || ''));
+
+const isClassScopedFee = (scope?: string) =>
+  /class|section|batch|group/i.test(String(scope || ''));
+
 const buildRowsFromSource = (
   paymentSource: Record<string, any> | null,
   amountSource: Record<string, any> | null,
-  dynamicFeeTypes: DynamicFeeType[] = []
+  dynamicFeeTypes: DynamicFeeType[] = [],
+  feeBreakdown: Array<Record<string, any>> = []
 ): FeeRow[] => {
   if (!paymentSource && !amountSource) return [];
 
@@ -139,69 +146,25 @@ const buildRowsFromSource = (
   const paymentLookup = new Map<string, any>(paymentEntries);
   const amountLookup = new Map<string, any>(amountEntries);
 
-  const findFirstValue = (keys: string[]) => {
+  const exactLookup = (keys: string[], lookups: Array<Map<string, any>>) => {
     for (const key of keys) {
-      const sourceLookup = keys.some((k) => /paid|discount|due/i.test(k)) ? paymentLookup : amountLookup;
       const variants = buildFeeKeyVariants(key);
-
-      for (const variant of variants) {
-        if (!sourceLookup.has(variant)) continue;
-        const numeric = toNumber(sourceLookup.get(variant));
-        if (numeric || sourceLookup.get(variant) === 0) return numeric;
-      }
-
-      for (const [candidateKey, candidateValue] of sourceLookup.entries()) {
-        const candidate = normalizeFeeKey(candidateKey);
-        if (!candidate) continue;
-        if (
-          variants.some(
-            (variant) =>
-              candidate === variant ||
-              candidate.includes(variant) ||
-              variant.includes(candidate)
-          )
-        ) {
-          const numeric = toNumber(candidateValue);
-          if (numeric || candidateValue === 0) return numeric;
+      for (const sourceLookup of lookups) {
+        for (const variant of variants) {
+          if (!sourceLookup.has(variant)) continue;
+          const numeric = toNumber(sourceLookup.get(variant));
+          if (numeric || sourceLookup.get(variant) === 0) return numeric;
         }
       }
     }
     return 0;
   };
 
-  const findBestAmountValue = (keys: string[]) => {
-    const matches: number[] = [];
+  const findFirstValue = (keys: string[], lookups: Array<Map<string, any>> = [paymentLookup, amountLookup]) =>
+    exactLookup(keys, lookups);
 
-    for (const key of keys) {
-      const variants = buildFeeKeyVariants(key);
-
-      for (const variant of variants) {
-        if (amountLookup.has(variant)) {
-          const numeric = toNumber(amountLookup.get(variant));
-          if (numeric || amountLookup.get(variant) === 0) matches.push(numeric);
-        }
-      }
-
-      for (const [candidateKey, candidateValue] of amountLookup.entries()) {
-        const candidate = normalizeFeeKey(candidateKey);
-        if (!candidate) continue;
-        if (
-          variants.some(
-            (variant) =>
-              candidate === variant ||
-              candidate.includes(variant) ||
-              variant.includes(candidate)
-          )
-        ) {
-          const numeric = toNumber(candidateValue);
-          if (numeric || candidateValue === 0) matches.push(numeric);
-        }
-      }
-    }
-
-    if (!matches.length) return 0;
-    return Math.max(...matches);
-  };
+  const findBestAmountValue = (keys: string[], lookups: Array<Map<string, any>> = [amountLookup, paymentLookup]) =>
+    exactLookup(keys, lookups);
 
   const rows: FeeRow[] = [];
   const seen = new Set<string>();
@@ -231,15 +194,28 @@ const buildRowsFromSource = (
 
   dynamicTypesByBase.forEach((item, base) => {
     const label = String(item?.feeName || item?.feesType || base).trim();
-    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label]);
-    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`]);
-    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`]);
-    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`]);
+    const scope = String(item?.scope || '').trim();
+    const amountLookups = isStudentScopedFee(scope)
+      ? [paymentLookup, amountLookup]
+      : isClassScopedFee(scope)
+      ? [amountLookup, paymentLookup]
+      : [amountLookup, paymentLookup];
+    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label], amountLookups);
+    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`], [paymentLookup, amountLookup]);
+    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`], [paymentLookup, amountLookup]);
+    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`], [paymentLookup, amountLookup]);
     const finalLabel = formatFeeLabel(label || base);
     addRow(finalLabel, amount, paid, discount);
-    if (due > 0 && seen.has(normalizeFeeKey(finalLabel))) {
+    if (seen.has(normalizeFeeKey(finalLabel))) {
       const existing = rows.find((row) => normalizeFeeKey(row.label) === normalizeFeeKey(finalLabel));
-      if (existing) existing.due = due;
+      if (existing) {
+        if (existing.amount > 0) {
+          existing.due = Math.max(existing.amount - existing.paid - existing.discount, 0);
+        } else if (due > 0) {
+          existing.amount = Math.max(existing.amount, existing.paid + existing.discount + due);
+          existing.due = due;
+        }
+      }
     }
   });
 
@@ -255,6 +231,7 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
   const [studentData, setStudentData] = useState<Record<string, any> | null>(null);
   const [classFeeSource, setClassFeeSource] = useState<Record<string, any> | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<string, any> | null>(null);
+  const [feeApiSummary, setFeeApiSummary] = useState<Record<string, any> | null>(null);
   const [dynamicFeeTypes, setDynamicFeeTypes] = useState<DynamicFeeType[]>([]);
   const [loading, setLoading] = useState(true);
   const { showError } = React.useContext(ErrorContext);
@@ -322,7 +299,7 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
       try {
         if (!studentData?.class_name || !studentData?.section || !studentData?.schoolCode) return;
 
-        const [studentFeeRes, classRes, studentRes, paymentRes, dynamicRowsRes, feeStructureRes] = await Promise.allSettled([
+        const [feeApiRes, classRes, studentRes, paymentRes, dynamicRowsRes, feeStructureRes] = await Promise.allSettled([
           axios.get(`https://cleezoclass.com:4000/api/fees/${encodeURIComponent(String(studentData.username || ''))}`, {
             params: { schoolCode: studentData.schoolCode },
           }),
@@ -357,7 +334,7 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
 
         if (!active) return;
 
-        const studentFeePayload = studentFeeRes.status === 'fulfilled' ? studentFeeRes.value.data?.data || {} : {};
+        const feeApiPayload = feeApiRes.status === 'fulfilled' ? feeApiRes.value.data?.data || {} : {};
         const classFeeData = classRes.status === 'fulfilled' ? classRes.value.data?.feeDetail || {} : {};
         const studentFeeData = studentRes.status === 'fulfilled' ? studentRes.value.data?.feeDetails || {} : {};
         const paymentPayload = paymentRes.status === 'fulfilled' ? paymentRes.value.data?.payments || {} : {};
@@ -373,7 +350,16 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
           ? dynamicRowsRes.value.data
           : [];
 
-        console.log('[ParentFees] studentFeePayload keys:', Object.keys(studentFeePayload || {}));
+        console.log('[ParentFees] API response bodies:', {
+          feeApiRes: feeApiRes.status === 'fulfilled' ? feeApiRes.value.data : feeApiRes.reason,
+          classRes: classRes.status === 'fulfilled' ? classRes.value.data : classRes.reason,
+          studentRes: studentRes.status === 'fulfilled' ? studentRes.value.data : studentRes.reason,
+          paymentRes: paymentRes.status === 'fulfilled' ? paymentRes.value.data : paymentRes.reason,
+          dynamicRowsRes: dynamicRowsRes.status === 'fulfilled' ? dynamicRowsRes.value.data : dynamicRowsRes.reason,
+          feeStructureRes: feeStructureRes.status === 'fulfilled' ? feeStructureRes.value.data : feeStructureRes.reason,
+        });
+
+        console.log('[ParentFees] feeApiPayload keys:', Object.keys(feeApiPayload || {}));
         console.log('[ParentFees] classFeeData keys:', Object.keys(classFeeData || {}));
         console.log('[ParentFees] studentFeeData keys:', Object.keys(studentFeeData || {}));
         console.log('[ParentFees] paymentPayload keys:', Object.keys(paymentPayload || {}));
@@ -391,8 +377,8 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
         })));
 
         const routeFeeData = {
-          ...(studentFeePayload || {}),
-          ...(studentFeePayload?.studentFeeDetails || {}),
+          ...(feeApiPayload || {}),
+          ...(feeApiPayload?.studentFeeDetails || {}),
         };
 
         const mergedFeeData = {
@@ -402,8 +388,53 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
           ...(paymentPayload?.discounts || {}),
         };
 
+        console.log('[ParentFees] fee fetch raw payloads:', {
+          feeApiPayloadKeys: Object.keys(feeApiPayload || {}),
+          classFeeDataKeys: Object.keys(classFeeData || {}),
+          studentFeeDataKeys: Object.keys(studentFeeData || {}),
+          paymentPayloadKeys: Object.keys(paymentPayload || {}),
+          feeStructureDataKeys: Object.keys(feeStructureData || {}),
+          fallbackClassFeeDataKeys: Object.keys(fallbackClassFeeData || {}),
+          mergedFeeDataKeys: Object.keys(mergedFeeData || {}),
+        });
+        console.log('[ParentFees] fee fetch important values:', {
+          studentName: studentData.name,
+          className: studentData.class_name,
+          section: studentData.section,
+          schoolCode: studentData.schoolCode,
+          studentId: studentData.studentId,
+          routeFeeData,
+        });
+        console.log('[ParentFees] fee api summary payload:', feeApiPayload);
+        console.log('[ParentFees] payment payload snapshot:', {
+          totalRemaining: paymentPayload?.totalRemaining,
+          totalDue: paymentPayload?.totalDue,
+          totalPaid: paymentPayload?.totalPaid,
+          paidAmount: paymentPayload?.paidAmount,
+          finalAmount: paymentPayload?.finalAmount,
+          completeFee: paymentPayload?.completeFee,
+          feeBreakdown: Array.isArray(paymentPayload?.feeBreakdown)
+            ? paymentPayload.feeBreakdown.map((row: any) => ({
+                key: row?.key,
+                label: row?.label,
+                total: row?.total,
+                amount: row?.amount,
+                paid: row?.paid,
+                discount: row?.discount,
+                due: row?.due,
+              }))
+            : [],
+        });
+
         setClassFeeSource(Object.keys(feeStructureData || {}).length ? feeStructureData : fallbackClassFeeData || null);
-        setPaymentDetails(paymentPayload || null);
+        setPaymentDetails({
+          ...(paymentPayload || {}),
+          ...(feeApiPayload || {}),
+          ...(feeApiPayload?.studentFeeDetails || {}),
+          ...(studentFeeData || {}),
+          ...(paymentPayload?.discounts || {}),
+        });
+        setFeeApiSummary(feeApiPayload || null);
         console.log('[ParentFees] feeStructureData keys:', Object.keys(feeStructureData || {}));
         console.log('[ParentFees] fallbackClassFeeData keys:', Object.keys(fallbackClassFeeData || {}));
         console.log('[ParentFees] mergedFeeData keys:', Object.keys(mergedFeeData || {}));
@@ -452,13 +483,14 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
         flattened[`${normalized}_due`] = row?.due ?? flattened[`${normalized}_due`];
       });
 
+      console.log('[ParentFees] flattened paymentSource:', flattened);
       return flattened;
     },
     [paymentDetails]
   );
 
   const feeRows = useMemo(() => {
-    const dynamicRows = buildRowsFromSource(paymentSource, classFeeSource, dynamicFeeTypes);
+    const dynamicRows = buildRowsFromSource(paymentSource, classFeeSource, dynamicFeeTypes, paymentDetails?.feeBreakdown || []);
     const allowedLabels = new Set(
       dynamicFeeTypes
         .map((item) => normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || ''))
@@ -474,9 +506,26 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
     console.log('[ParentFees] feeSource resolved amounts:', {
       dynamicTypeCount: dynamicFeeTypes.length,
     });
+    console.log('[ParentFees] summary row values:', finalRows.map((row) => ({
+      label: row.label,
+      amount: row.amount,
+      paid: row.paid,
+      discount: row.discount,
+      due: row.due,
+    })));
 
     return finalRows;
-  }, [classFeeSource, dynamicFeeTypes, paymentSource]);
+  }, [classFeeSource, dynamicFeeTypes, paymentDetails?.feeBreakdown, paymentSource]);
+
+  const getExplicitNumeric = (source: Record<string, any> | null, keys: string[]) => {
+    for (const key of keys) {
+      if (!source || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+      const raw = source[key];
+      if (raw === null || raw === undefined || raw === '') continue;
+      return toNumber(raw);
+    }
+    return null;
+  };
 
   const summaryTotalFee = useMemo(() => {
     return feeRows.reduce((sum, row) => sum + row.amount, 0);
@@ -491,10 +540,21 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
   }, [feeRows]);
 
   const summaryDue = useMemo(() => {
-    return Math.max(summaryTotalFee - summaryPaid - summaryDiscount, 0);
-  }, [summaryDiscount, summaryPaid, summaryTotalFee]);
+    return feeRows.reduce((sum, row) => sum + row.due, 0);
+  }, [feeRows]);
 
-  const feeChartMax = Math.max(summaryPaid, summaryDue, 1);
+  const feeChartMax = Math.max(summaryTotalFee, summaryPaid + summaryDue, 1);
+
+  useEffect(() => {
+    console.log('[ParentFees] summary totals:', {
+      summaryTotalFee,
+      summaryPaid,
+      summaryDiscount,
+      summaryDue,
+      feeChartMax,
+      feeRowsCount: feeRows.length,
+    });
+  }, [feeChartMax, feeRows.length, summaryDiscount, summaryDue, summaryPaid, summaryTotalFee]);
 
   const studentProfile = useMemo(
     () => ({
@@ -587,30 +647,38 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
       <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.studentDataWrap}>
         <View style={styles.transactionWrap}>
           <View style={styles.summaryRow}>
-            <View style={[appStyles.dashboardGridCard, styles.summaryCardLeft]}>
-              <View style={appStyles.dashboardGridCornerAccent} />
-              <View style={appStyles.gridIconWrap}>
-                <MaterialIcons name="payments" size={24} color="#000000" />
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[styles.summaryGradientCard, styles.summaryCardLeft]}
+            >
+              <View style={styles.summaryGradientIconWrap}>
+                <MaterialIcons name="payments" size={24} color="#1A1A1A" />
               </View>
               <View style={styles.summaryCardContent}>
-                <Text style={appStyles.gridLabel}>Discount</Text>
-                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryDiscount)}</Text>
-                <Text style={[appStyles.gridLabel, { marginTop: 8 }]}>Amount</Text>
-                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryTotalFee)}</Text>
+                <Text style={styles.summaryGradientLabel}>Discount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryDiscount)}</Text>
+                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryTotalFee)}</Text>
               </View>
-            </View>
-            <View style={[appStyles.dashboardGridCard, styles.summaryCardRight]}>
-              <View style={appStyles.dashboardGridCornerAccent} />
-              <View style={appStyles.gridIconWrap}>
-                <MaterialIcons name="account-balance-wallet" size={24} color="#000000" />
+            </LinearGradient>
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[styles.summaryGradientCard, styles.summaryCardRight]}
+            >
+              <View style={styles.summaryGradientIconWrap}>
+                <MaterialIcons name="account-balance-wallet" size={24} color="#1A1A1A" />
               </View>
               <View style={styles.summaryCardContent}>
-                <Text style={appStyles.gridLabel}>Due</Text>
-                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryDue)}</Text>
-                <Text style={[appStyles.gridLabel, { marginTop: 8 }]}>Amount</Text>
-                <Text style={appStyles.dashboardGridMetaValue}>{formatINR(summaryPaid)}</Text>
+                <Text style={styles.summaryGradientLabel}>Due</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryDue)}</Text>
+                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryPaid)}</Text>
               </View>
-            </View>
+            </LinearGradient>
           </View>
 
           <View style={styles.tableCard}>
@@ -820,16 +888,51 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
+  summaryGradientCard: {
+    flex: 1,
+    minHeight: 210,
+    borderRadius: 28,
+    padding: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
   summaryCardLeft: { marginRight: 8 },
   summaryCardRight: { marginLeft: 8 },
+  summaryGradientIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    marginBottom: 14,
+  },
   summaryCardContent: {
     flex: 1,
     width: '100%',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    paddingTop: 22,
-    paddingBottom: 16,
-    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 2,
+  },
+  summaryGradientLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.86)',
+    textAlign: 'right',
+  },
+  summaryGradientValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'right',
   },
   tableCard: {
     flex: 1,

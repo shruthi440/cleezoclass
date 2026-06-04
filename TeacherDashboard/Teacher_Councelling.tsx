@@ -14,11 +14,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-import FooterLogo from '../Footerlogo';
-import Footer from '../Footer';
 import Header from '../ChiefHeader';
 
 import { globalStyles as styles } from '../teacherStyles';
+import TeacherFooter from './TeacherFooter';
 
 const BASE_URL = 'https://cleezoclass.com:4000';
 
@@ -209,8 +208,6 @@ const [reason, setReason] = useState('');
                                   <View style={styles.dashedLine} />
                                   <View style={styles.rightNotch} />
                                 </View>
-                                          <View style={styles.footerWrapper}><Footer /></View>
-
          
           </View>
 
@@ -288,7 +285,7 @@ const [reason, setReason] = useState('');
         </Modal>
 
       </ScrollView>
-                <View style={styles.footerWrapper1}><FooterLogo /></View>
+      <TeacherFooter />
 
     </SafeAreaView>
   );

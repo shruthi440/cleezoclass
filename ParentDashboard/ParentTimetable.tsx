@@ -246,37 +246,45 @@ const ParentTimetable: React.FC<
           </LinearGradient>
 
           <View style={ttStyles.summaryRow}>
-            <View style={[appStyles.dashboardGridCard, ttStyles.summaryCardLeft]}>
-              <View style={appStyles.dashboardGridCornerAccent} />
-              <View style={appStyles.gridIconWrap}>
-                <MaterialIcons name="calendar-today" size={24} color="#000000" />
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[appStyles.dashboardGridCard, ttStyles.summaryCardLeft]}
+            >
+              <View style={ttStyles.summaryGradientTopRightIcon}>
+                <MaterialIcons name="calendar-today" size={24} color="#FFFFFF" />
               </View>
               <View style={ttStyles.summaryCardContent}>
-                <Text style={ttStyles.summaryCardLabel}>Today&apos;s Classes</Text>
-                <Text style={ttStyles.summaryCardValue}>{todayPeriods.length}</Text>
-                <Text style={ttStyles.summaryCardText}>
+                <Text style={[ttStyles.summaryCardLabel, ttStyles.summaryCardLabelLight]}>Today&apos;s Classes</Text>
+                <Text style={[ttStyles.summaryCardValue, ttStyles.summaryCardValueLight]}>{todayPeriods.length}</Text>
+                <Text style={[ttStyles.summaryCardText, ttStyles.summaryCardTextLight]}>
                   {todayRow ? `${todayRow.day} schedule` : 'No classes today'}
                 </Text>
               </View>
-            </View>
+            </LinearGradient>
 
-            <View style={[appStyles.dashboardGridCard, ttStyles.summaryCardRight]}>
-              <View style={appStyles.dashboardGridCornerAccent} />
-              <View style={appStyles.gridIconWrap}>
-                <MaterialIcons name="schedule" size={24} color="#000000" />
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[appStyles.dashboardGridCard, ttStyles.summaryCardRight]}
+            >
+              <View style={ttStyles.summaryGradientTopRightIcon}>
+                <MaterialIcons name="schedule" size={24} color="#FFFFFF" />
               </View>
               <View style={ttStyles.summaryCardContent}>
-                <Text style={ttStyles.summaryCardLabel}>Next Period</Text>
-                <Text style={ttStyles.summaryCardValue}>
+                <Text style={[ttStyles.summaryCardLabel, ttStyles.summaryCardLabelLight]}>Next Period</Text>
+                <Text style={[ttStyles.summaryCardValue, ttStyles.summaryCardValueLight]}>
                   {nextPeriod ? String(nextPeriod.subject || '--') : '--'}
                 </Text>
-                <Text style={ttStyles.summaryCardText}>
+                <Text style={[ttStyles.summaryCardText, ttStyles.summaryCardTextLight]}>
                   {nextPeriod
                     ? `${nextPeriodDay} • ${String(nextPeriod.fromTime || '').slice(0, 5)} - ${String(nextPeriod.toTime || '').slice(0, 5)}`
                     : 'No upcoming period'}
                 </Text>
               </View>
-            </View>
+            </LinearGradient>
           </View>
 
           {loading ? (
@@ -442,6 +450,26 @@ const ttStyles = StyleSheet.create({
     color: '#60646C',
     textAlign: 'right',
     fontWeight: '600',
+  },
+  summaryGradientTopRightIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  summaryCardLabelLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardValueLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardTextLight: {
+    color: 'rgba(255,255,255,0.84)',
   },
   academicGradientSection: {
     marginTop: 0,

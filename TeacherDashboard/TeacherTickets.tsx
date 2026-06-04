@@ -16,7 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ThemeContext } from '../ThemeContext';
 import { globalStyles as styles } from '../teacherStyles';
 import Header from '../ChiefHeader';
-import Footer from '../Footer';
+import TeacherFooter from './TeacherFooter';
 import { useNextClass } from '../NextClassContext';
 
 /* ---------------- TYPES ---------------- */
@@ -150,14 +150,11 @@ const { username} = route.params || {};
     <Text style={styles.extraBtnText}>Reason</Text>
   </TouchableOpacity>
 </View>
- <View style={styles.footerWrapper}>
-                         <Footer /></View>
           </View>
-              
         </View>
-
-                     
       </ScrollView>
+
+      <TeacherFooter />
 
       {/* EMPTY MODAL */}
       <Modal transparent visible={false} animationType="fade">

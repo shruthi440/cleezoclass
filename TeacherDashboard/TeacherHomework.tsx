@@ -30,7 +30,9 @@ import {
 import { launchImageLibrary, Asset } from 'react-native-image-picker';
 
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
+import TeacherFooter from './TeacherFooter';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const API_BASE = 'http://162.215.210.38:3010/api';
@@ -471,14 +473,20 @@ const TeacherHomework: React.FC<
       <StatusBar barStyle="dark-content" />
       <ScrollView style={local.scrollView} contentContainerStyle={local.scrollContent}>
         <View style={local.container}>
+          {dropdownLoading ? (
+            <View style={local.loadingBanner}>
+              <ActivityIndicator size="small" color="#111827" />
+              <Text style={local.loadingBannerText}>Loading class and section...</Text>
+            </View>
+          ) : null}
+
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${card.title}-${index}`}
                 style={[
-                  local.summaryCard,
                   index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-                  { backgroundColor: card.background },
+                  { flex: 1 },
                 ]}
               >
                 <View style={local.summaryText}>
@@ -497,7 +505,7 @@ const TeacherHomework: React.FC<
                 <View style={local.summaryIconWrap}>
                   <Ionicons name={card.icon} size={28} color="#4C4C4C" />
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -645,26 +653,23 @@ const TeacherHomework: React.FC<
         </View>
       </Modal>
 
-      {dropdownLoading && (
-        <View style={ui.loadingOverlay}>
-          <ActivityIndicator size="large" color="#fff" />
-        </View>
-      )}
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
 
 const local = StyleSheet.create({
-  screen: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#F4F6F8',
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#F4F6F8',
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 28,
+    paddingBottom: 130,
   },
   container: {
     gap: 14,
@@ -672,24 +677,44 @@ const local = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 40,
+    marginBottom: 4,
+  },
+  loadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  loadingBannerText: {
+    color: '#111827',
+    fontSize: 12,
+    fontWeight: '600',
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E1E4EA',
     paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 3,
   },
   summaryCardLeft: {
     marginRight: 4,

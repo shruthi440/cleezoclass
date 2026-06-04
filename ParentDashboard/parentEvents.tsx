@@ -16,6 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
 import { createAppStyles } from "../App.styles";
+import ParentFooter from './ParentFooter';
 
 const API_BASE = "https://cleezoclass.com:4000/api";
 
@@ -275,6 +276,7 @@ const ParentHomepage: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <ParentFooter />
     </SafeAreaView>
   );
 };

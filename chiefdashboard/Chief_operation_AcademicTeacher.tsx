@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import ChiefFooterProfile from './ChiefFooterProfile';
 import { globalStyles as styles } from '../styles';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -419,7 +420,7 @@ const AcademicTeacher: React.FC = () => {
               style={footerStyles.footerItem}
               onPress={() => navigation.navigate('ChiefDashboard' as never)}
             >
-              <Ionicons name="person-outline" size={18} color="#B0B0B5" />
+              <ChiefFooterProfile />
               <Text style={footerStyles.footerLabelMuted}>Profile</Text>
             </TouchableOpacity>
           </View>

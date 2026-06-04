@@ -205,12 +205,7 @@ const ParentPhotos: React.FC<
     <SafeAreaView style={baseStyles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <ScrollView style={baseStyles.scrollView} contentContainerStyle={photoStyles.scrollContent} nestedScrollEnabled>
-        <LinearGradient
-          colors={['#F5E9E4', '#F7F7F5', '#E7F1F4']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[photoStyles.page, embedded && photoStyles.embeddedPage]}
-        >
+  
           <LinearGradient
             colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
             start={{ x: 0, y: 0 }}
@@ -225,29 +220,45 @@ const ParentPhotos: React.FC<
             </View>
 
             <View style={photoStyles.summaryRow}>
-              <View style={[appStyles.dashboardGridCard, photoStyles.summaryCardLeft]}>
-                <View style={appStyles.dashboardGridCornerAccent} />
-                <View style={appStyles.gridIconWrap}>
-                  <MaterialIcons name="photo-library" size={24} color="#000000" />
+              <LinearGradient
+                colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+                start={{ x: 0.05, y: 0.05 }}
+                end={{ x: 0.95, y: 0.95 }}
+                style={[appStyles.dashboardGridCard, photoStyles.summaryCardLeft]}
+              >
+                <View style={photoStyles.summaryGradientTopRightIcon}>
+                  <MaterialIcons name="photo-library" size={24} color="#FFFFFF" />
                 </View>
                 <View style={photoStyles.summaryCardContent}>
-                  <Text style={photoStyles.summaryCardLabel}>Folders</Text>
-                  <Text style={photoStyles.summaryCardValue}>{eventFolders.length}</Text>
-                  <Text style={photoStyles.summaryCardText}>Event albums</Text>
+                  <Text style={[photoStyles.summaryCardLabel, photoStyles.summaryCardLabelLight]}>Folders</Text>
+                  <Text style={[photoStyles.summaryCardValue, photoStyles.summaryCardValueLight]}>
+                    {eventFolders.length}
+                  </Text>
+                  <Text style={[photoStyles.summaryCardText, photoStyles.summaryCardTextLight]}>
+                    Event albums
+                  </Text>
                 </View>
-              </View>
+              </LinearGradient>
 
-              <View style={[appStyles.dashboardGridCard, photoStyles.summaryCardRight]}>
-                <View style={appStyles.dashboardGridCornerAccent} />
-                <View style={appStyles.gridIconWrap}>
-                  <MaterialIcons name="image" size={24} color="#000000" />
+              <LinearGradient
+                colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+                start={{ x: 0.05, y: 0.05 }}
+                end={{ x: 0.95, y: 0.95 }}
+                style={[appStyles.dashboardGridCard, photoStyles.summaryCardRight]}
+              >
+                <View style={photoStyles.summaryGradientTopRightIcon}>
+                  <MaterialIcons name="image" size={24} color="#FFFFFF" />
                 </View>
                 <View style={photoStyles.summaryCardContent}>
-                  <Text style={photoStyles.summaryCardLabel}>Images</Text>
-                  <Text style={photoStyles.summaryCardValue}>{totalImages}</Text>
-                  <Text style={photoStyles.summaryCardText}>Total uploads</Text>
+                  <Text style={[photoStyles.summaryCardLabel, photoStyles.summaryCardLabelLight]}>Images</Text>
+                  <Text style={[photoStyles.summaryCardValue, photoStyles.summaryCardValueLight]}>
+                    {totalImages}
+                  </Text>
+                  <Text style={[photoStyles.summaryCardText, photoStyles.summaryCardTextLight]}>
+                    Total uploads
+                  </Text>
                 </View>
-              </View>
+              </LinearGradient>
             </View>
           </LinearGradient>
 
@@ -303,7 +314,7 @@ const ParentPhotos: React.FC<
                   onPress={() => setSelectedEventName(null)}
                   style={photoStyles.backButton}
                 >
-                  <Text style={photoStyles.backButtonText}>← Back to Folders</Text>
+                  <Text style={photoStyles.backButtonText}> Back</Text>
                 </TouchableOpacity>
 
                 <Text style={photoStyles.galleryTitle}>{selectedEventName}</Text>
@@ -345,7 +356,6 @@ const ParentPhotos: React.FC<
               </View>
             )}
           </View>
-        </LinearGradient>
       </ScrollView>
 
       <Modal
@@ -495,6 +505,26 @@ const photoStyles = StyleSheet.create({
     textAlign: 'right',
     fontWeight: '600',
   },
+  summaryGradientTopRightIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  summaryCardLabelLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardValueLight: {
+    color: '#FFFFFF',
+  },
+  summaryCardTextLight: {
+    color: 'rgba(255,255,255,0.84)',
+  },
   contentCard: {
     flex: 1,
     backgroundColor: '#fff',
@@ -528,7 +558,7 @@ const photoStyles = StyleSheet.create({
     gap: 12,
   },
   albumCard: {
-    width: '48%',
+    width: '90%',
     minHeight: 170,
     backgroundColor: '#F7F8FA',
     borderRadius: 24,
@@ -541,6 +571,8 @@ const photoStyles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
+    borderLeftWidth: 4,
+    borderLeftColor: '#6826df',
   },
   albumHeader: {
     flexDirection: 'row',
@@ -563,7 +595,7 @@ const photoStyles = StyleSheet.create({
     minWidth: 30,
     height: 30,
     borderRadius: 999,
-    backgroundColor: '#FF7246',
+    backgroundColor: '#a171faff',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -633,7 +665,7 @@ const photoStyles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   backButton: {
-    backgroundColor: 'rgb(160, 180, 182)',
+    backgroundColor: '#814de2ff',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,

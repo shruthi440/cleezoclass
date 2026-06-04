@@ -18,6 +18,12 @@ import { NextClassProvider } from './NextClassContext';
 import { TeacherTimetableProvider } from './Modalcontext';
 import TeacherLogin from './TeacherDashboard/Login';
 import TeacherAdmissionDashboard from './TeacherDashboard/DashboardScreen';
+import TeacherAdmissionRegister from './TeacherDashboard/TeacherAdmissionRegister';
+import TeacherAdmissionAdmission from './TeacherDashboard/TeacherAdmissionAdmission';
+import TeacherAdmissionEnrollment from './TeacherDashboard/TeacherAdmissionEnrollment';
+import TeacherAdmissionCommunication from './TeacherDashboard/TeacherAdmissionCommunication';
+import TeacherAdmissionTestCounselling from './TeacherDashboard/TeacherAdmissionTestCounselling';
+import TeacherAdmissionReports from './TeacherDashboard/TeacherAdmissionReports';
 import TeacherDashboard from './TeacherDashboard/TeacherDashboard';
 import TeacherAttendance from './TeacherDashboard/TeacherAttendance';
 import TeacherBehaviour from './TeacherDashboard/TeacherBehaviour';
@@ -34,7 +40,9 @@ import TeacherQuestionPaperGeneration from './TeacherDashboard/TeacherQuestionPa
 import TeacherLeaveRequest from './TeacherDashboard/TeacherLeaveRequest';
 import TeacherChatAndEvents from './TeacherDashboard/TeacherChatAndEvents';
 import TeacherCounselling from './TeacherDashboard/Teacher_Councelling';
+import ScanPull from './TeacherDashboard/Scan&Pull';
 import TeacherModuleSummary from './TeacherDashboard/TeacherModuleSummary';
+import TeacherAnnouncements from './TeacherDashboard/TeacherAnnouncements';
 import ParentDashboard from './ParentDashboard/ParentDashboard';
 import ParentAcademic from './ParentDashboard/ParentAcademic';
 import ParentAttendance from './ParentDashboard/ParentAttendance';
@@ -45,22 +53,47 @@ import ParentCalender from './ParentDashboard/ParentCalender';
 import ParentPhotos from './ParentDashboard/ParentPhotos';
 import ParentLiveChatTicket from './ParentDashboard/ParentLiveChatTicket';
 import ParentHomepage from './ParentDashboard/parentEvents';
+import ParentAnnouncements from './ParentDashboard/ParentAnnouncements';
 import AdminDashboard from './AdminDashboard';
 import ChiefDashboard from './chiefdashboard/ChiefDashboard';
 import AcademicStudent from './chiefdashboard/Chief_operation_AcademicStudent';
 import AcademicTeacher from './chiefdashboard/Chief_operation_AcademicTeacher';
 import ExamManagement from './chiefdashboard/Chief_operation_ExamManagement';
 import Meetings from './chiefdashboard/Chief_operation_Meetings';
+import ChiefAnnouncements from './chiefdashboard/ChiefAnnouncements';
 import ChiefAttendanceAndPayroll from './chiefdashboard/ChiefAttendanceAndPayroll';
 import ParentStudentIconManagement from './ParentDashboard/ParentDetails';
 import AccountantDashboard from './AccountantDashboard/AccountantDashboard';
-import BusManagerDashboard from './BusManagerDashboard';
+import BusManagerDashboard from './BusDashboard/BusManagerDashboard';
+import BusDriverDashboard from './BusDashboard/BusDriverDashboard';
 
 type RootStackParamList = {
   TeacherLogin: undefined;
-  TeacherDashboard: { username?: string; name?: string } | undefined;
+  TeacherDashboard:
+    | { username?: string; name?: string; moduleLabel?: string; openProfilePanel?: boolean }
+    | undefined;
   TeacherModuleSummary: { username?: string; name?: string; moduleLabel?: string } | undefined;
-  TeacherAdmissionDashboard: { username?: string; name?: string } | undefined;
+  TeacherAdmissionDashboard:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionRegister:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionAdmission:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionEnrollment:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionCommunication:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionTestCounselling:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionReports:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
   TeacherAttendance: { username?: string; name?: string } | undefined;
   TeacherBehaviour: { username?: string; name?: string } | undefined;
   TeacherTimetable: { username?: string; name?: string } | undefined;
@@ -76,6 +109,8 @@ type RootStackParamList = {
   TeacherLeaveRequest: { username?: string; name?: string } | undefined;
   TeacherChatAndEvents: { username?: string; name?: string } | undefined;
   TeacherCounselling: { username?: string; name?: string } | undefined;
+  TeacherAnnouncements: { username?: string; name?: string } | undefined;
+  ScanPull: undefined;
   ParentDetails: { username?: string; name?: string } | undefined;
   ParentDashboard: { username?: string; name?: string } | undefined;
   ParentAcademic: { username?: string; name?: string } | undefined;
@@ -87,14 +122,18 @@ type RootStackParamList = {
   ParentPhotos: { username?: string; name?: string } | undefined;
   ParentLiveChatTicket: { username?: string; name?: string } | undefined;
   ParentHomepage: { username?: string; name?: string } | undefined;
+  ParentAnnouncements: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;
   AccountantDashboard: { username?: string; name?: string } | undefined;
   ChiefDashboard: { username?: string; name?: string } | undefined;
   BusManagerDashboard: undefined;
+  BusDashboard: undefined;
+  BusDriverDashboard: undefined;
   AcademicStudent: undefined;
   AcademicTeacher: undefined;
   ExamManagement: undefined;
   Meetings: undefined;
+  ChiefAnnouncements: undefined;
   ChiefAttendanceAndPayroll: undefined;
 };
 
@@ -234,6 +273,36 @@ const App = () => {
                     component={TeacherAdmissionDashboard}
                   />
                   <Stack.Screen
+                    name="TeacherAdmissionRegister"
+                    component={TeacherAdmissionRegister}
+                    initialParams={{ moduleLabel: 'Register' }}
+                  />
+                  <Stack.Screen
+                    name="TeacherAdmissionAdmission"
+                    component={TeacherAdmissionAdmission}
+                    initialParams={{ moduleLabel: 'Admission' }}
+                  />
+                  <Stack.Screen
+                    name="TeacherAdmissionEnrollment"
+                    component={TeacherAdmissionEnrollment}
+                    initialParams={{ moduleLabel: 'Enrollment' }}
+                  />
+                  <Stack.Screen
+                    name="TeacherAdmissionCommunication"
+                    component={TeacherAdmissionCommunication}
+                    initialParams={{ moduleLabel: 'Communication' }}
+                  />
+                  <Stack.Screen
+                    name="TeacherAdmissionTestCounselling"
+                    component={TeacherAdmissionTestCounselling}
+                    initialParams={{ moduleLabel: 'Test & Couns.' }}
+                  />
+                  <Stack.Screen
+                    name="TeacherAdmissionReports"
+                    component={TeacherAdmissionReports}
+                    initialParams={{ moduleLabel: 'Reports' }}
+                  />
+                  <Stack.Screen
                     name="TeacherDashboard"
                     component={TeacherDashboard}
                   />
@@ -341,9 +410,18 @@ const App = () => {
                     name="TeacherCounselling"
                     component={TeacherCounselling as React.ComponentType<any>}
                   />
-<Stack.Screen
+                  <Stack.Screen
+                    name="TeacherAnnouncements"
+                    component={TeacherAnnouncements as React.ComponentType<any>}
+                  />
+                  <Stack.Screen name="ScanPull" component={ScanPull as React.ComponentType<any>} />
+                  <Stack.Screen
+                    name="ParentAnnouncements"
+                    component={ParentAnnouncements as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
                     name="ParentDetails"
-                    component={ParentStudentIconManagement }
+                    component={ParentStudentIconManagement}
                   />
                   <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
                   <Stack.Screen
@@ -354,6 +432,14 @@ const App = () => {
                   <Stack.Screen
                     name="BusManagerDashboard"
                     component={BusManagerDashboard as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
+                    name="BusDashboard"
+                    component={BusManagerDashboard as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
+                    name="BusDriverDashboard"
+                    component={BusDriverDashboard as React.ComponentType<any>}
                   />
                   <Stack.Screen
                     name="AcademicStudent"
@@ -370,6 +456,10 @@ const App = () => {
                   <Stack.Screen
                     name="Meetings"
                     component={Meetings as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
+                    name="ChiefAnnouncements"
+                    component={ChiefAnnouncements as React.ComponentType<any>}
                   />
                   <Stack.Screen
                     name="ChiefAttendanceAndPayroll"

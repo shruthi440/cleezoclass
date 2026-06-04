@@ -23,6 +23,7 @@ import { createAppStyles } from '../App.styles';
 import axios from 'axios';
 import { StackedBarChart } from "react-native-chart-kit";
 import { ErrorContext } from '../ErrorContext';
+import ParentFooter from './ParentFooter';
 
 /* ---------------- TYPES ---------------- */
 
@@ -399,6 +400,7 @@ useEffect(() => {
           </View>
         </View>
       </ScrollView>
+      <ParentFooter embedded={embedded} />
 
     </SafeAreaView>
   );

@@ -73,6 +73,7 @@ type LeadSummary = {
   mobile_number?: string;
   email_id?: string;
   lead_admission_for?: string;
+  grade?: string;
   reg_no?: string | number;
   ticket_no?: string | number;
   status?: string;
@@ -80,6 +81,10 @@ type LeadSummary = {
   admission_paid?: string | number;
   date?: string;
   lead_time?: string;
+  test_date?: string;
+  test_time?: string;
+  counselling_date?: string;
+  counselling_time?: string;
   entry_type?: string;
   channel?: string;
   channels?: string[];
@@ -181,9 +186,10 @@ type PickedFileWithMeta = PickedFile & {
 };
 
 type TeacherDashboardRouteParams = {
-  TeacherDashboard?: {
+  TeacherAdmissionDashboard?: {
     username?: string;
     name?: string;
+    moduleLabel?: AdmissionModuleLabel;
   };
 };
 
@@ -205,7 +211,44 @@ type TeacherDashboardStackParamList = {
     username?: string;
     name?: string;
   } | undefined;
+  TeacherAdmissionDashboard: {
+    username?: string;
+    name?: string;
+    moduleLabel?: AdmissionModuleLabel;
+  } | undefined;
+  TeacherAdmissionRegister: {
+    username?: string;
+    name?: string;
+  } | undefined;
+  TeacherAdmissionAdmission: {
+    username?: string;
+    name?: string;
+  } | undefined;
+  TeacherAdmissionEnrollment: {
+    username?: string;
+    name?: string;
+  } | undefined;
+  TeacherAdmissionCommunication: {
+    username?: string;
+    name?: string;
+  } | undefined;
+  TeacherAdmissionTestCounselling: {
+    username?: string;
+    name?: string;
+  } | undefined;
+  TeacherAdmissionReports: {
+    username?: string;
+    name?: string;
+  } | undefined;
 };
+
+type AdmissionModuleLabel =
+  | 'Register'
+  | 'Admission'
+  | 'Enrollment'
+  | 'Communication'
+  | 'Test & Couns.'
+  | 'Reports';
 
 type SectionKey = 'admission' | 'enrollment' | 'communication' | 'test' | 'reports';
 type DateFieldKey =
@@ -325,10 +368,17 @@ const renderIcon = (kind: IconKind, name: string, color: string, size: number) =
 
 const formatDatePickerValue = (date: Date) => date.toISOString().split('T')[0];
 
-const DashboardScreen = () => {
+type DashboardScreenProps = {
+  showFooter?: boolean;
+};
+
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ showFooter = true }) => {
   const navigation = useNavigation<NativeStackNavigationProp<TeacherDashboardStackParamList>>();
-  const route = useRoute<RouteProp<TeacherDashboardRouteParams, 'TeacherDashboard'>>();
-  const [selectedChip, setSelectedChip] = useState('');
+  const route = useRoute<RouteProp<TeacherDashboardRouteParams, 'TeacherAdmissionDashboard'>>();
+  const activeModuleLabel = route.params?.moduleLabel;
+  const [selectedChip, setSelectedChip] = useState<AdmissionModuleLabel | ''>(
+    activeModuleLabel ?? ''
+  );
   const [showTeacherDetails, setShowTeacherDetails] = useState(false);
   const [showAccountSwitchOptions, setShowAccountSwitchOptions] = useState(false);
   const [parentProfileCache, setParentProfileCache] = useState<Record<string, any> | null>(null);
@@ -443,7 +493,6 @@ const DashboardScreen = () => {
   const [reportSearch, setReportSearch] = useState('');
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState('');
-  const [showFooterNav, setShowFooterNav] = useState(false);
   const [activeDateField, setActiveDateField] = useState<DateFieldKey | null>(null);
   const { width, height } = useWindowDimensions();
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
@@ -472,12 +521,12 @@ const DashboardScreen = () => {
     reports: null,
   });
   const currentModuleIndex = Math.max(0, topChips.indexOf(selectedChip));
-  const [moduleOpen, setModuleOpen] = useState(true);
-  const showAdmissionPanel = true;
-  const showEnrollmentPanel = true;
-  const showCommunicationPanel = true;
-  const showTestPanel = true;
-  const showReportPanel = true;
+  const isModulePage = Boolean(activeModuleLabel);
+  const showAdmissionPanel = activeModuleLabel === 'Register' || activeModuleLabel === 'Admission';
+  const showEnrollmentPanel = activeModuleLabel === 'Enrollment';
+  const showCommunicationPanel = activeModuleLabel === 'Communication';
+  const showTestPanel = activeModuleLabel === 'Test & Couns.';
+  const showReportPanel = activeModuleLabel === 'Reports';
   const normalizedStoredReferBy = normalizeCampaignStaffName(storedReferBy || registerForm.refer_by);
   const myReferredLeads = communicationLeads.filter((lead) => {
     if (!normalizedStoredReferBy) return false;
@@ -569,47 +618,50 @@ const DashboardScreen = () => {
     if (chip === 'Reports') return 'reports';
     return null;
   }
-  const scrollToSection = (sectionKey: SectionKey, attempt = 0) => {
-    pendingScrollSection.current = sectionKey;
-    requestAnimationFrame(() => {
-      const scrollNode = scrollRef.current;
-      const targetY = sectionOffsets.current[sectionKey];
-
-      if (!scrollNode || targetY == null) {
-        if (attempt < 8) {
-          setTimeout(() => scrollToSection(sectionKey, attempt + 1), 60);
-        }
-        return;
-      }
-
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          scrollNode.scrollTo({
-            y: Math.max(0, moduleSectionOffset.current + targetY - 12),
-            animated: true,
-          });
-          pendingScrollSection.current = null;
-        });
-      }, attempt === 0 ? 40 : 0);
+  const getAdmissionRouteForChip = (chip: AdmissionModuleLabel) => {
+    switch (chip) {
+      case 'Register':
+        return 'TeacherAdmissionRegister';
+      case 'Admission':
+        return 'TeacherAdmissionAdmission';
+      case 'Enrollment':
+        return 'TeacherAdmissionEnrollment';
+      case 'Communication':
+        return 'TeacherAdmissionCommunication';
+      case 'Test & Couns.':
+        return 'TeacherAdmissionTestCounselling';
+      case 'Reports':
+        return 'TeacherAdmissionReports';
+      default:
+        return 'TeacherAdmissionDashboard';
+    }
+  };
+  const navigateToModule = (chip: AdmissionModuleLabel) => {
+    const routeName = getAdmissionRouteForChip(chip);
+    setSelectedChip(chip);
+    (navigation as any).navigate(routeName, {
+      username: teacherProfile.username || route.params?.username || '',
+      name: teacherProfile.name || route.params?.name || '',
     });
   };
   const openModule = (chip: string) => {
-    console.log('[DashboardScroll] openModule', {
-      chip,
-      currentSelectedChip: selectedChip,
-    });
-    setSelectedChip(chip);
-    setModuleOpen(true);
-    const sectionKey = getSectionKeyForChip(chip);
-    if (sectionKey) {
-      scrollToSection(sectionKey);
+    if (
+      chip === 'Register' ||
+      chip === 'Admission' ||
+      chip === 'Enrollment' ||
+      chip === 'Communication' ||
+      chip === 'Test & Couns.' ||
+      chip === 'Reports'
+    ) {
+      navigateToModule(chip);
+      return;
     }
   };
   const closeModule = () => {
-    console.log('[DashboardScroll] closeModule');
     setSelectedChip('');
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    (navigation as any).navigate('TeacherAdmissionDashboard', {
+      username: teacherProfile.username || route.params?.username || '',
+      name: teacherProfile.name || route.params?.name || '',
     });
   };
   const goToPreviousModule = () => {
@@ -718,6 +770,10 @@ const DashboardScreen = () => {
 
     loadTeacherProfile();
   }, [route.params]);
+
+  useEffect(() => {
+    setSelectedChip(activeModuleLabel ?? '');
+  }, [activeModuleLabel]);
 
   useEffect(() => {
     const loadParentProfileCache = async () => {
@@ -850,8 +906,7 @@ const DashboardScreen = () => {
   };
 
   const handleGoBack = () => {
-    setShowFooterNav(true);
-    goToPreviousModule();
+    navigation.goBack();
   };
 
   const handleOpenProfilePanel = () => {
@@ -861,11 +916,9 @@ const DashboardScreen = () => {
 
   const handleOpenHomePanel = () => {
     setShowTeacherDetails(false);
-    setShowFooterNav(false);
-    setSelectedChip('');
-    setModuleOpen(true);
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    (navigation as any).navigate('TeacherAdmissionDashboard', {
+      username: teacherProfile.username || route.params?.username || '',
+      name: teacherProfile.name || route.params?.name || '',
     });
   };
 
@@ -1984,12 +2037,6 @@ const DashboardScreen = () => {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               scrollEventThrottle={16}
-              onScroll={(event) => {
-                const scrollY = event.nativeEvent.contentOffset.y;
-                if (scrollY > 8) {
-                  setShowFooterNav(true);
-                }
-              }}
             >
               <View style={styles.chipStickyHeader}>
                 <ScrollView
@@ -2026,59 +2073,61 @@ const DashboardScreen = () => {
                 </ScrollView>
               </View>
 
-              <View style={styles.homeSection}>
-                <View style={styles.heroCard}>
-                  <View style={styles.heroGlow} />
-                  <Image source={heroImage} style={styles.heroImage} resizeMode="contain" />
-                </View>
+              {!isModulePage && (
+                <View style={styles.homeSection}>
+                  <View style={styles.heroCard}>
+                    <View style={styles.heroGlow} />
+                    <Image source={heroImage} style={styles.heroImage} resizeMode="contain" />
+                  </View>
 
-                <Text style={styles.sectionTitle}>Dashboard</Text>
+                  <Text style={styles.sectionTitle}>Dashboard</Text>
 
-                <View style={styles.dashboardGrid}>
-                  {dashboardTiles.map((tile) => (
-                    <Pressable
-                      key={tile.label}
-                      hitSlop={8}
-                      onPress={() => openModule(tile.chipLabel)}
-                      style={styles.dashboardGridCardThree}
-                    >
-                      <View style={styles.dashboardTileIconWrap}>
-                        {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
-                      </View>
-                      <Text style={styles.dashboardTileLabel}>{tile.label}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-
-                <Text style={styles.sectionTitle}>Campaigning Status</Text>
-
-                <View style={styles.statusCardsRow}>
-                  {campaignCards.map((card, index) => (
-                    <View
-                      key={card.subtitle}
-                      style={[
-                        styles.statusCard,
-                        index === 0 ? styles.statusCardLeft : styles.statusCardRight,
-                        { backgroundColor: card.background },
-                      ]}
-                    >
-                      <View style={styles.statusCardText}>
-                        <View style={styles.statusTitleRow}>
-                          <Text style={styles.statusNumber}>{card.title}</Text>
-                          <Text style={styles.statusSubtitle}>{card.subtitle}</Text>
+                  <View style={styles.dashboardGrid}>
+                    {dashboardTiles.map((tile) => (
+                      <Pressable
+                        key={tile.label}
+                        hitSlop={8}
+                        onPress={() => openModule(tile.chipLabel)}
+                        style={styles.dashboardGridCardThree}
+                      >
+                        <View style={styles.dashboardTileIconWrap}>
+                          {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
                         </View>
-                        <Text style={styles.statusFooter}>{card.footer}</Text>
-                      </View>
+                        <Text style={styles.dashboardTileLabel}>{tile.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
 
-                      <View style={styles.statusIconWrap}>
-                        {renderIcon(card.kind, card.icon, '#4C4C4C', 30)}
+                  <Text style={styles.sectionTitle}>Campaigning Status</Text>
+
+                  <View style={styles.statusCardsRow}>
+                    {campaignCards.map((card, index) => (
+                      <View
+                        key={card.subtitle}
+                        style={[
+                          styles.statusCard,
+                          index === 0 ? styles.statusCardLeft : styles.statusCardRight,
+                          { backgroundColor: card.background },
+                        ]}
+                      >
+                        <View style={styles.statusCardText}>
+                          <View style={styles.statusTitleRow}>
+                            <Text style={styles.statusNumber}>{card.title}</Text>
+                            <Text style={styles.statusSubtitle}>{card.subtitle}</Text>
+                          </View>
+                          <Text style={styles.statusFooter}>{card.footer}</Text>
+                        </View>
+
+                        <View style={styles.statusIconWrap}>
+                          {renderIcon(card.kind, card.icon, '#4C4C4C', 30)}
+                        </View>
                       </View>
-                    </View>
-                  ))}
+                    ))}
+                  </View>
                 </View>
-              </View>
+              )}
 
-              {moduleOpen && (
+              {isModulePage && (
                 <View
                   style={styles.moduleSection}
                   onLayout={(event) => {
@@ -3115,7 +3164,7 @@ const DashboardScreen = () => {
                     </View>
                   )}
               </View>
-            )}
+              )}
 
             </ScrollView>
 
@@ -3414,36 +3463,36 @@ const DashboardScreen = () => {
               </View>
             </Modal>
 
-            <View style={styles.footer}>
-              {showFooterNav && (
+            {showFooter && (
+              <View style={styles.footer}>
                 <View style={styles.footerNav}>
                   <Pressable style={styles.footerNavItem} onPress={handleGoBack}>
                     <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
                     <Text style={styles.footerNavLabel}>Back</Text>
                   </Pressable>
                   <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
-                    <MaterialIcons name="home" size={22} color="#C2C2C7" />
+                    <MaterialIcons name="home" size={22} color="#1F1F22" />
                     <Text style={styles.footerNavLabel}>Home</Text>
                   </Pressable>
                   <Pressable style={styles.footerAddButton} onPress={() => openModule('Register')}>
                     <MaterialIcons name="add" size={26} color="#FFFFFF" />
                   </Pressable>
                   <Pressable style={styles.footerNavItem}>
-                    <MaterialIcons name="chat-bubble-outline" size={22} color="#C2C2C7" />
+                    <MaterialIcons name="chat-bubble-outline" size={22} color="#1F1F22" />
                     <Text style={styles.footerNavLabelMuted}>Chat</Text>
                   </Pressable>
                   <Pressable style={styles.footerNavItem} onPress={handleOpenProfilePanel}>
-                    <MaterialIcons name="person-outline" size={22} color="#C2C2C7" />
+                    <MaterialIcons name="person-outline" size={22} color="#1F1F22" />
                     <Text style={styles.footerNavLabelMuted}>Profile</Text>
                   </Pressable>
                 </View>
-              )}
-              <View style={styles.footerBrandRow}>
-                <Text style={styles.poweredBy}>Powered By</Text>
-                <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+                <View style={styles.footerBrandRow}>
+                  <Text style={styles.poweredBy}>Powered By</Text>
+                  <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+                </View>
+                <View style={styles.homeIndicator} />
               </View>
-              {showFooterNav && <View style={styles.homeIndicator} />}
-            </View>
+            )}
 
           </View>
         </View>

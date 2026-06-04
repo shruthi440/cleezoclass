@@ -21,10 +21,10 @@ import ticketIcon from '../icons/application.png';
 import { ThemeContext } from '../ThemeContext';
 import { globalStyles as styles } from '../styles';
 import Header from '../ChiefHeader';
-import Footer from '../Footer';
-import FooterLogo from '../Footerlogo';
+import TeacherFooter from './TeacherFooter';
 import { RootStackParamList } from '../types';
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
+import TeacherSummaryCard from './TeacherSummaryCard';
 import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
@@ -38,25 +38,29 @@ const localStyles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 40,
     paddingHorizontal: 12,
     paddingTop: 6,
     paddingBottom: 8,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 3,
   },
   summaryCardLeft: {
     marginRight: 4,
@@ -96,6 +100,11 @@ const localStyles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
     paddingTop: 2,
+  },
+  topicSendButton: {
+    alignSelf: 'center',
+    marginLeft: 12,
+    marginTop: 10,
   },
 });
 /* ---------------- TYPES ---------------- */
@@ -412,12 +421,11 @@ const saveTopicOfDay = async (topicName: string) => {
         <View style={styles.container}>
           <View style={localStyles.summaryRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${card.subtitle}-${index}`}
                 style={[
                   localStyles.summaryCard,
                   index === 0 ? localStyles.summaryCardLeft : localStyles.summaryCardRight,
-                  { backgroundColor: card.background },
                 ]}
               >
                 <View style={localStyles.summaryText}>
@@ -436,7 +444,7 @@ const saveTopicOfDay = async (topicName: string) => {
                 <View style={localStyles.summaryIconWrap}>
                   <Ionicons name={card.icon as any} size={28} color="#4C4C4C" />
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -616,12 +624,8 @@ const saveTopicOfDay = async (topicName: string) => {
                   </View>
                 </View>
               </View>
-            </View>
-
-            {/* MESSAGE ICON */}
-            <View style={styles.centerIconRow}>
               <TouchableOpacity
-                style={styles.messageBtnTall}
+                style={[styles.messageBtnTall, localStyles.topicSendButton]}
                 onPress={() => {
                   if (!selectedClass || !selectedSubject || !selectedLesson || !selectedTopic) {
                     alert("Please select Class, Subject, Lesson and Topic");
@@ -686,10 +690,6 @@ const saveTopicOfDay = async (topicName: string) => {
   </TouchableWithoutFeedback>
 </Modal>
           </View>
-  <View style={styles.footerWrapper}>
-              <Footer />
-            </View>
-        
         </View>
      
           </View>
@@ -699,7 +699,7 @@ const saveTopicOfDay = async (topicName: string) => {
         <View />
       </Modal>
            <View style={styles.footerWrapper1}>
-            <FooterLogo />
+            <TeacherFooter />
           </View>
     </SafeAreaView>
   );

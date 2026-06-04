@@ -1,7 +1,29 @@
 export type RootStackParamList = {
   TeacherLogin: undefined;
-  TeacherDashboard: { username?: string; name?: string; moduleLabel?: string } | undefined;
-  TeacherAdmissionDashboard: { username?: string; name?: string } | undefined;
+  TeacherDashboard:
+    | { username?: string; name?: string; moduleLabel?: string; openProfilePanel?: boolean }
+    | undefined;
+  TeacherAdmissionDashboard:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionRegister:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionAdmission:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionEnrollment:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionCommunication:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionTestCounselling:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
+  TeacherAdmissionReports:
+    | { username?: string; name?: string; moduleLabel?: string }
+    | undefined;
   TeacherAttendance: { username?: string; name?: string } | undefined;
   TeacherBehaviour: { username?: string; name?: string } | undefined;
   TeacherTimetable: { username?: string; name?: string } | undefined;
@@ -34,9 +56,12 @@ export type RootStackParamList = {
   AccountantDashboard: { username?: string; name?: string } | undefined;
   ChiefDashboard: { username?: string; name?: string } | undefined;
   BusManagerDashboard: undefined;
+  BusDashboard: undefined;
+  BusDriverDashboard: undefined;
   AcademicStudent: undefined;
   AcademicTeacher: undefined;
   ExamManagement: undefined;
   Meetings: undefined;
+  ChiefAnnouncements: undefined;
   ChiefAttendanceAndPayroll: undefined;
 };

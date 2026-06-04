@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { ErrorContext } from '../ErrorContext';
+import ParentFooter from './ParentFooter';
 
 /* ================= TYPES ================= */
 
@@ -258,6 +259,7 @@ const selectStudent = async (student: any) => {
   }
 
   return (
+    <>
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Select a Student</Text>
 
@@ -311,9 +313,9 @@ const selectStudent = async (student: any) => {
           </TouchableOpacity>
         );
       })}
-
-
     </ScrollView>
+    <ParentFooter />
+    </>
   );
 };
 

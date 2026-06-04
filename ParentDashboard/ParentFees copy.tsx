@@ -16,6 +16,7 @@ import axios from 'axios';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { ErrorContext } from '../ErrorContext';
+import ParentFooter from './ParentFooter';
 import { RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ParentFees'>;
@@ -1090,9 +1091,15 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
     </View>
   );
 
-  return embedded ? <View style={styles.embeddedCard}>{content}</View> : (
+  return embedded ? (
+    <View style={styles.embeddedCard}>
+      {content}
+      <ParentFooter embedded={embedded} />
+    </View>
+  ) : (
     <SafeAreaView style={styles.safeArea}>
       {content}
+      <ParentFooter />
     </SafeAreaView>
   );
 };

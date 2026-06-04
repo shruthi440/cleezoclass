@@ -15,9 +15,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Footer from '../Footer';
-import FooterLogo from '../Footerlogo';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 import { heightPercentageToDP as hp } from 'react-native-responsive-screen';
 
 /* ---------------- TYPES ---------------- */
@@ -432,12 +432,11 @@ const TeacherSalary: React.FC<
         <View style={local.container}>
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${card.title}-${index}`}
                 style={[
                   local.summaryCard,
                   index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-                  { backgroundColor: card.background },
                 ]}
               >
                 <View style={local.summaryCardText}>
@@ -456,7 +455,7 @@ const TeacherSalary: React.FC<
                 <View style={local.summaryCardIconWrap}>
                   <Ionicons name={card.icon as any} size={28} color="#4C4C4C" />
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -583,9 +582,6 @@ const TeacherSalary: React.FC<
             </View>
           </View>
 
-          <View style={styles.footerWrapper}>
-            <Footer />
-          </View>
         </View>
       </ScrollView>
 
@@ -610,9 +606,7 @@ const TeacherSalary: React.FC<
           </View>
         </View>
       </Modal>
-      <View style={styles.footerWrapper1}>
-        <FooterLogo />
-      </View>
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -632,23 +626,22 @@ const local = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 60,
     marginBottom: 12,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
   },
   summaryCardLeft: {
     marginRight: 4,

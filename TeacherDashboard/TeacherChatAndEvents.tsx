@@ -23,6 +23,8 @@ import { ThemeContext } from '../ThemeContext';
 import { globalStyles as styles } from '../teacherStyles';
 import ticketIcon from '../icons/application.png'
 import { useNextClass } from '../NextClassContext';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 const BASE_URL = 'https://cleezoclass.com:4000';
 
@@ -524,7 +526,7 @@ const endedChats = chatRequests.filter(
 
           <View style={ui.summaryGrid}>
             {summaryCards.map((card, index) => (
-              <TouchableOpacity
+              <TeacherSummaryCard
                 key={card.label}
                 style={[
                   ui.summaryCard,
@@ -534,9 +536,8 @@ const endedChats = chatRequests.filter(
               >
                 <Text style={ui.summaryLabel}>{card.label}</Text>
                 <Text style={ui.summaryAmount}>{card.value}</Text>
-                <View style={ui.summaryDivider} />
                 <Text style={ui.summaryFooter}>{card.footer}</Text>
-              </TouchableOpacity>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -602,8 +603,8 @@ const endedChats = chatRequests.filter(
                       ))}
                     </Picker>
                   </View>
-                  <TouchableOpacity onPress={openDateTimePicker} style={ui.dateButton}>
-                    <Text style={ui.dateButtonText}>
+                  <TouchableOpacity onPress={openDateTimePicker} style={styles.dropdownContainer}>
+                    <Text style={styles.dropdownText}>
                       {dateConfirmed ? selectedDate.toLocaleString() : 'Set Date & Time'}
                     </Text>
                   </TouchableOpacity>
@@ -764,6 +765,7 @@ const endedChats = chatRequests.filter(
     </View>
   </View>
 </Modal>
+    <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -808,29 +810,30 @@ const ui = StyleSheet.create({
   summaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 40,
   },
   summaryCard: {
     width: '48%',
-    minHeight: 108,
-    borderWidth: 1,
-    borderColor: '#ccc',
+    minHeight: 92,
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     marginBottom: 10,
-    justifyContent: 'center',
   },
-  summaryCardLeft: { backgroundColor: '#D7E8C9', marginRight: 8 },
-  summaryCardRight: { backgroundColor: '#F2EE9E', marginLeft: 8 },
+  summaryCardLeft: { marginRight: 8 },
+  summaryCardRight: { marginLeft: 8 },
   summaryLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#000',
     fontWeight: '700',
   },
   summaryAmount: {
     marginTop: 6,
     fontSize: 18,
-    color: '#111',
+    color: '#000',
     fontWeight: '800',
   },
   summaryDivider: {
@@ -839,7 +842,7 @@ const ui = StyleSheet.create({
     marginVertical: 10,
   },
   summaryFooter: {
-    color: '#666',
+    color: '#000',
     fontSize: 12,
     lineHeight: 16,
   },

@@ -281,6 +281,46 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
     loadStorage();
   }, []);
 
+  useEffect(() => {
+    const debugChiefProfileStorage = async () => {
+      try {
+        const [username, schoolCode, userDetailsRaw, photoUrl, photo] = await Promise.all([
+          AsyncStorage.getItem('username'),
+          AsyncStorage.getItem('schoolCode'),
+          AsyncStorage.getItem('userDetails'),
+          AsyncStorage.getItem('photoUrl'),
+          AsyncStorage.getItem('photo'),
+        ]);
+
+        let userDetails: Record<string, any> = {};
+        if (userDetailsRaw) {
+          try {
+            userDetails = JSON.parse(userDetailsRaw);
+          } catch (error) {
+            console.log('[chiefolddshboard] failed to parse userDetails', error);
+          }
+        }
+
+        console.log('[chiefolddshboard] chief storage snapshot', {
+          username: username || null,
+          schoolCode: schoolCode || null,
+          hasUserDetails: Boolean(userDetailsRaw),
+          userDetailsKeys: Object.keys(userDetails || {}),
+          storedPhotoUrl: photoUrl || null,
+          storedPhoto: photo || null,
+          userDetailsPhotoUrl: userDetails.photoUrl || null,
+          userDetailsPhoto: userDetails.photo || null,
+          userDetailsProfileImage: userDetails.profileImage || null,
+          userDetailsAvatar: userDetails.avatar || null,
+        });
+      } catch (error) {
+        console.log('[chiefolddshboard] chief storage snapshot failed', error);
+      }
+    };
+
+    void debugChiefProfileStorage();
+  }, []);
+
   // ------------------- Fetch Institute Info -------------------
   useEffect(() => {
     if (!currentDbName) return;

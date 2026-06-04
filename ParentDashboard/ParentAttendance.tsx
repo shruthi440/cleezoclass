@@ -297,37 +297,49 @@ const ParentAttendance: React.FC<Props> = ({ navigation }) => {
           </View>
         </LinearGradient>
 
-        <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 4, paddingTop: 14 }}>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={[appStyles.dashboardGridCard, { flex: 1 }]}>
-              <View style={appStyles.dashboardGridCardContent}>
-                <View style={[appStyles.dashboardGridCornerAccent, { backgroundColor: '#0a3d62' }]} />
-                <View style={appStyles.dashboardGridTextBlock}>
-                  <Text style={appStyles.gridLabel}>Leaves</Text>
-                  <Text style={appStyles.dashboardGridMetaLabel}>Records</Text>
-                  <Text style={appStyles.dashboardGridMetaValue}>{totalLeaves}</Text>
-                </View>
-                <View style={appStyles.gridIconWrap}>
-                  <MaterialIcons name="event-note" size={28} color="#000000" />
-                </View>
+          <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 4, paddingTop: 14 }}>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={[appStyles.dashboardGridCard, { flex: 1 }]}>
+                <LinearGradient
+                  colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+                  start={{ x: 0.05, y: 0.05 }}
+                  end={{ x: 0.95, y: 0.95 }}
+                  style={appStyles.dashboardGridCardContent}
+                >
+                  <View style={appStyles.dashboardGridTextBlock}>
+                    <Text style={[appStyles.gridLabel, { color: '#FFFFFF' }]}>Leaves</Text>
+                    <Text style={[appStyles.dashboardGridMetaLabel, { color: 'rgba(255,255,255,0.84)' }]}>
+                      Records
+                    </Text>
+                    <Text style={[appStyles.dashboardGridMetaValue, { color: '#FFFFFF' }]}>{totalLeaves}</Text>
+                  </View>
+                  <View style={appStyles.gridIconWrap}>
+                    <MaterialIcons name="event-note" size={28} color="#000000" />
+                  </View>
+                </LinearGradient>
+              </View>
+              <View style={[appStyles.dashboardGridCard, { flex: 1 }]}>
+                <LinearGradient
+                  colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+                  start={{ x: 0.05, y: 0.05 }}
+                  end={{ x: 0.95, y: 0.95 }}
+                  style={appStyles.dashboardGridCardContent}
+                >
+                  <View style={appStyles.dashboardGridTextBlock}>
+                    <Text style={[appStyles.gridLabel, { color: '#FFFFFF' }]}>Student</Text>
+                    <Text style={[appStyles.dashboardGridMetaLabel, { color: 'rgba(255,255,255,0.84)' }]}>
+                      Class
+                    </Text>
+                    <Text style={[appStyles.dashboardGridMetaValue, { color: '#FFFFFF' }]} numberOfLines={1}>
+                      {studentClass} {studentSection}
+                    </Text>
+                  </View>
+                  <View style={appStyles.gridIconWrap}>
+                    <MaterialIcons name="school" size={28} color="#000000" />
+                  </View>
+                </LinearGradient>
               </View>
             </View>
-            <View style={[appStyles.dashboardGridCard, { flex: 1 }]}>
-              <View style={appStyles.dashboardGridCardContent}>
-                <View style={[appStyles.dashboardGridCornerAccent, { backgroundColor: '#0a3d62' }]} />
-                <View style={appStyles.dashboardGridTextBlock}>
-                  <Text style={appStyles.gridLabel}>Student</Text>
-                  <Text style={appStyles.dashboardGridMetaLabel}>Class</Text>
-                  <Text style={appStyles.dashboardGridMetaValue} numberOfLines={1}>
-                    {studentClass} {studentSection}
-                  </Text>
-                </View>
-                <View style={appStyles.gridIconWrap}>
-                  <MaterialIcons name="school" size={28} color="#000000" />
-                </View>
-              </View>
-            </View>
-          </View>
 
           <View
             style={{

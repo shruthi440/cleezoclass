@@ -24,6 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import ticketIcon from '../icons/application.png';
 import { ThemeContext } from '../ThemeContext';
+import TeacherFooter from './TeacherFooter';
 import {
   globalStyles as styles,
   attendanceStyles as ui,
@@ -33,6 +34,7 @@ import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
 import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 /* ---------------- TYPES ---------------- */
 interface Student {
@@ -44,6 +46,14 @@ interface Student {
 interface AttendanceState {
   [key: number]: 'present' | 'absent' | null;
 }
+
+const buildAllPresentAttendance = (studentList: Student[]) => {
+  const all: AttendanceState = {};
+  studentList.forEach((_, index) => {
+    all[index] = 'present';
+  });
+  return all;
+};
 
 interface LeaveStudent {
   username: string;
@@ -221,6 +231,7 @@ useEffect(() => {
 
         setStudents(sorted);
         setFilteredStudents(sorted);
+        setAttendance(buildAllPresentAttendance(sorted));
         setLeaveTypes(new Array(sorted.length).fill(null));
         setStudentsLoaded(true);
       } else {
@@ -322,8 +333,14 @@ useEffect(() => {
       const newAttendance = { ...attendance };
       delete newAttendance[index];
       setAttendance(newAttendance);
+      const updatedLeaveTypes = [...leaveTypes];
+      updatedLeaveTypes[index] = null;
+      setLeaveTypes(updatedLeaveTypes);
     } else {
       setAttendance({ ...attendance, [index]: 'present' });
+      const updatedLeaveTypes = [...leaveTypes];
+      updatedLeaveTypes[index] = null;
+      setLeaveTypes(updatedLeaveTypes);
     }
   };
 
@@ -347,9 +364,8 @@ useEffect(() => {
 
   /* ---------------- SELECT ALL STUDENTS ---------------- */
   const handleSelectAll = () => {
-    const all: AttendanceState = {};
-    students.forEach((_, i) => (all[i] = 'present'));
-    setAttendance(all);
+    setAttendance(buildAllPresentAttendance(students));
+    setLeaveTypes(new Array(students.length).fill(null));
   };
 
   const summaryCards = useMemo(
@@ -422,32 +438,32 @@ const availableSections = selectedClass
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={ui.page}
-        nestedScrollEnabled
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 60, marginBottom: 12 }}>
           {summaryCards.map((card, index) => (
-            <View
-              key={`${card.title}-${index}`}
-              style={{
-                flex: 1,
-                height: 108,
-                borderRadius: 14,
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                marginRight: index === 0 ? 4 : 0,
-                marginLeft: index === 1 ? 4 : 0,
-                backgroundColor: card.background,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                overflow: 'hidden',
-                shadowColor: '#000',
-                shadowOpacity: 0.06,
-                shadowRadius: 8,
-                shadowOffset: { width: 0, height: 4 },
-                elevation: 1,
-              }}
-            >
+              <TeacherSummaryCard
+                key={`${card.title}-${index}`}
+                style={{
+                  flex: 1,
+                  minHeight: 92,
+                  borderRadius: 14,
+                  backgroundColor: 'transparent',
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  paddingVertical: 0,
+                  paddingHorizontal: 0,
+                  marginRight: index === 0 ? 4 : 0,
+                  marginLeft: index === 1 ? 4 : 0,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  overflow: 'hidden',
+                 
+                  shadowRadius: 10,
+                  shadowOffset: { width: 0, height: 4 },
+                  elevation: 3,
+                }}
+              >
               <View style={{ flex: 1, paddingRight: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' }}>
                   <Text
@@ -476,9 +492,9 @@ const availableSections = selectedClass
               <View style={{ width: 34, alignItems: 'flex-end', justifyContent: 'center', paddingTop: 2 }}>
                 <Ionicons name={card.icon} size={28} color="#4C4C4C" />
               </View>
-            </View>
-          ))}
-        </View>
+              </TeacherSummaryCard>
+            ))}
+          </View>
 
         <View style={ui.card}>
           <Text style={ui.cardLabel}>Class and Section</Text>
@@ -561,8 +577,11 @@ const availableSections = selectedClass
               data={filteredStudents}
               keyExtractor={(item) => item.username}
               numColumns={3}
-              nestedScrollEnabled
-              showsVerticalScrollIndicator
+              scrollEnabled={false}
+              showsVerticalScrollIndicator={false}
+              initialNumToRender={filteredStudents.length}
+              maxToRenderPerBatch={filteredStudents.length}
+              windowSize={Math.max(21, Math.ceil(filteredStudents.length / 3))}
               columnWrapperStyle={ui.studentGridRow}
               contentContainerStyle={ui.studentGridContent}
               renderItem={({ item }) => {
@@ -647,6 +666,8 @@ const availableSections = selectedClass
           </Modal>
 
       </ScrollView>
+
+      <TeacherFooter />
     </SafeAreaView>
   );
 };

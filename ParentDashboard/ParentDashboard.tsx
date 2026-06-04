@@ -34,6 +34,7 @@ import ParentCalender from './ParentCalender';
 import ParentPhotos from './ParentPhotos';
 import ParentLiveChatTicket from './ParentLiveChatTicket';
 import ParentHomepage from './parentEvents';
+import ParentAnnouncements from './ParentAnnouncements';
 
 const ParentHomeworkView = ParentHomework as unknown as React.ComponentType<any>;
 const ParentAcademicView = ParentAcademic as unknown as React.ComponentType<any>;
@@ -56,7 +57,8 @@ type ParentModuleRoute =
   | 'ParentCalender'
   | 'ParentPhotos'
   | 'ParentLiveChatTicket'
-  | 'ParentHomepage';
+  | 'ParentHomepage'
+  | 'ParentAnnouncements';
 
 type ParentTile = {
   label: string;
@@ -196,6 +198,196 @@ const resolveRenderablePhotoUri = (value?: string | null) => {
   }
 };
 
+const normalizeFeeKey = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const buildFeeKeyVariants = (value: string) => {
+  const normalized = normalizeFeeKey(value);
+  const variants = new Set<string>();
+  if (!normalized) return [];
+
+  variants.add(normalized);
+  variants.add(normalized.replace(/_fee(s)?$/, ''));
+  variants.add(normalized.replace(/_amount$/, ''));
+
+  if (normalized.endsWith('s')) {
+    variants.add(normalized.slice(0, -1));
+  } else {
+    variants.add(`${normalized}s`);
+  }
+
+  if (normalized.endsWith('ies')) {
+    variants.add(normalized.replace(/ies$/, 'y'));
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const toFeeNumber = (value: any) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const mergeFeeData = (classFeeData: Record<string, any> | null, studentFeeData: Record<string, any> | null) => {
+  const merged: Record<string, any> = { ...(classFeeData || {}) };
+
+  Object.entries(studentFeeData || {}).forEach(([key, studentValue]) => {
+    if (studentValue === null || studentValue === undefined || studentValue === '') return;
+
+    const classValue = merged[key];
+    const studentLooksNumeric =
+      typeof studentValue === 'number' ||
+      (typeof studentValue === 'string' && studentValue.trim() !== '' && !Number.isNaN(Number(studentValue)));
+
+    if (studentLooksNumeric) {
+      const studentAmount = toFeeNumber(studentValue);
+      const classAmount = toFeeNumber(classValue);
+      if (studentAmount === 0 && classAmount > 0) return;
+    }
+
+    merged[key] = studentValue;
+  });
+
+  return merged;
+};
+
+const buildFeeRowsFromSource = (
+  paymentSource: Record<string, any> | null,
+  amountSource: Record<string, any> | null,
+  dynamicFeeTypes: Array<{ feeName?: string; feesType?: string; columnBase?: string }> = [],
+) => {
+  if (!paymentSource && !amountSource) return [];
+
+  const paymentEntries = Object.entries(paymentSource || {}).map(([key, value]) => [normalizeFeeKey(key), value] as const);
+  const amountEntries = Object.entries(amountSource || {}).map(([key, value]) => [normalizeFeeKey(key), value] as const);
+  const paymentLookup = new Map<string, any>(paymentEntries);
+  const amountLookup = new Map<string, any>(amountEntries);
+
+  const findFirstValue = (keys: string[]) => {
+    for (const key of keys) {
+      const sourceLookup = keys.some((k) => /paid|discount|due/i.test(k)) ? paymentLookup : amountLookup;
+      const variants = buildFeeKeyVariants(key);
+
+      for (const variant of variants) {
+        if (!sourceLookup.has(variant)) continue;
+        const numeric = toFeeNumber(sourceLookup.get(variant));
+        if (numeric || sourceLookup.get(variant) === 0) return numeric;
+      }
+
+      for (const [candidateKey, candidateValue] of sourceLookup.entries()) {
+        const candidate = normalizeFeeKey(candidateKey);
+        if (!candidate) continue;
+        if (
+          variants.some(
+            (variant) =>
+              candidate === variant ||
+              candidate.includes(variant) ||
+              variant.includes(candidate)
+          )
+        ) {
+          const numeric = toFeeNumber(candidateValue);
+          if (numeric || candidateValue === 0) return numeric;
+        }
+      }
+    }
+    return 0;
+  };
+
+  const findBestAmountValue = (keys: string[]) => {
+    const lookups = [paymentLookup, amountLookup];
+
+    for (const lookup of lookups) {
+      const exactMatches: number[] = [];
+      const fuzzyMatches: number[] = [];
+
+      for (const key of keys) {
+        const variants = buildFeeKeyVariants(key);
+
+        for (const variant of variants) {
+          if (lookup.has(variant)) {
+            const numeric = toFeeNumber(lookup.get(variant));
+            if (numeric || lookup.get(variant) === 0) exactMatches.push(numeric);
+          }
+        }
+
+        for (const [candidateKey, candidateValue] of lookup.entries()) {
+          const candidate = normalizeFeeKey(candidateKey);
+          if (!candidate) continue;
+          if (
+            variants.some(
+              (variant) =>
+                candidate === variant ||
+                candidate.includes(variant) ||
+                variant.includes(candidate)
+            )
+          ) {
+            const numeric = toFeeNumber(candidateValue);
+            if (numeric || candidateValue === 0) fuzzyMatches.push(numeric);
+          }
+        }
+      }
+
+      if (exactMatches.length) return Math.max(...exactMatches);
+      if (fuzzyMatches.length) return Math.max(...fuzzyMatches);
+    }
+
+    return 0;
+  };
+
+  const rows: Array<{ label: string; amount: number; paid: number; discount: number; due: number }> = [];
+  const seen = new Set<string>();
+
+  const addRow = (label: string, amount: number, paid: number, discount: number) => {
+    const due = Math.max(amount - paid - discount, 0);
+    const key = normalizeFeeKey(label);
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({ label, amount, paid, discount, due });
+  };
+
+  const dynamicTypesByBase = new Map<string, { feeName?: string; feesType?: string; columnBase?: string }>();
+  dynamicFeeTypes.forEach((item) => {
+    const label = String(item?.feeName || item?.feesType || '').trim();
+    const base = normalizeFeeKey(item?.columnBase || label);
+    if (base) dynamicTypesByBase.set(base, item);
+  });
+
+  dynamicTypesByBase.forEach((item, base) => {
+    const label = String(item?.feeName || item?.feesType || base).trim();
+    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label]);
+    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`]);
+    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`]);
+    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`]);
+    const finalLabel = String(label || base).trim();
+    addRow(finalLabel, amount, paid, discount);
+    if (due > 0 && amount <= 0 && seen.has(normalizeFeeKey(finalLabel))) {
+      const existing = rows.find((row) => normalizeFeeKey(row.label) === normalizeFeeKey(finalLabel));
+      if (existing) existing.due = due;
+    }
+  });
+
+  return rows;
+};
+
+const formatINR = (value: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+
 const topChips = ['Overview', 'Learning', 'Attendance', 'Support', 'Events'];
 
 const parentTiles: ParentTile[] = [
@@ -305,10 +497,10 @@ const parentTiles: ParentTile[] = [
   },
   {
     label: 'Announcements',
-    icon: 'photo-library',
+    icon: 'campaign',
     kind: 'material',
-    route: 'ParentHomepage',
-    component: ParentHomepage,
+    route: 'ParentAnnouncements',
+    component: ParentAnnouncements,
     iconColor: '#000000',
     borderColor: '#D9DDE5',
     iconBg: '#FFFFFF',
@@ -317,6 +509,102 @@ const parentTiles: ParentTile[] = [
     metaValue: '',
   },
 ];
+
+const parentDashboardCardStyles = StyleSheet.create({
+  cardWrapper: {
+    width: '46.6%',
+    minHeight: 112,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginBottom: 12,
+    overflow: 'visible',
+  },
+  card: {
+    width: '100%',
+    minHeight: 112,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: '#D8DDE6',
+    position: 'relative',
+    overflow: 'hidden',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  cardActive: {
+    borderColor: '#B59BF4',
+  },
+  cornerAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 34,
+    height: 112,
+    overflow: 'hidden',
+    borderTopLeftRadius: 0,
+    borderBottomRightRadius: 80,
+    backgroundColor: 'transparent',
+  },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'transparent',
+    marginBottom: 0,
+  },
+  cardContent: {
+    width: '100%',
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'flex-end',
+    paddingTop: 0,
+  },
+  textBlock: {
+    flex: 1,
+    minWidth: 0,
+    width: '100%',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingTop: 44,
+    paddingBottom: 12,
+    paddingHorizontal: 14,
+  },
+  label: {
+    fontSize: 14,
+    textAlign: 'right',
+    fontWeight: '800',
+    color: '#222222',
+    lineHeight: 17,
+    marginTop: 8,
+    marginBottom: 0,
+    paddingHorizontal: 4,
+  },
+  subtitle: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'right',
+    color: '#6C6C74',
+    fontWeight: '600',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+});
 
 const renderIcon = (kind: IconKind, name: string, color: string, size: number) => {
   if (kind === 'fontawesome') {
@@ -608,7 +896,7 @@ const ParentDashboard = () => {
         (await AsyncStorage.getItem('studentId')) ||
         '';
 
-      const [academicRes, feeRes] = await Promise.all([
+      const [academicRes, studentFeeRes, classRes, paymentRes, dynamicRowsRes, feeStructureRes, dynamicFeeTypesRes] = await Promise.allSettled([
         axios.post('https://cleezoclass.com:4000/api/overall/academic-performance', {
           name: activeStudent.name,
           class_name: activeStudent.class_name,
@@ -619,9 +907,35 @@ const ParentDashboard = () => {
           studentId,
           schoolCode: activeStudent.schoolCode,
         }),
+        axios.get('https://cleezoclass.com:4000/api/feeDetailsByClassSection', {
+          params: {
+            className: activeStudent.class_name,
+            section: activeStudent.section,
+            schoolCode: activeStudent.schoolCode,
+          },
+        }),
+        axios.get(`https://cleezoclass.com:4000/api/payment/${studentId}?schoolCode=${activeStudent.schoolCode}`),
+        axios.get('https://cleezoclass.com:4000/api/student-transactions-dynamic', {
+          params: {
+            schoolCode: activeStudent.schoolCode,
+            studentName: activeStudent.name || activeStudent.username || '',
+            className: activeStudent.class_name,
+            section: activeStudent.section,
+            includeUnpaid: 1,
+          },
+        }),
+        axios.get(`https://cleezoclass.com:4000/feeStructure/${encodeURIComponent(String(activeStudent.class_name || ''))}`, {
+          params: {
+            schoolCode: activeStudent.schoolCode,
+            section: activeStudent.section,
+          },
+        }),
+        axios.get('https://cleezoclass.com:4000/api/fee-types', {
+          params: { schoolCode: activeStudent.schoolCode, _t: Date.now() },
+        }),
       ]);
 
-      const academicData = academicRes.data;
+      const academicData = academicRes.status === 'fulfilled' ? academicRes.value.data : {};
       const performance = Array.isArray(academicData)
         ? academicData
         : Array.isArray(academicData?.performance)
@@ -632,27 +946,89 @@ const ParentDashboard = () => {
       const testTypes = Array.isArray(academicData?.testTypes) ? academicData.testTypes : [];
       setAcademicSummary(computeAcademicSummary(performance, testTypes));
 
-      const feeDetails = feeRes.data?.feeDetails || feeRes.data?.feeDetail || {};
-      const paidAmount =
-        Number(feeDetails.Paid_Amount ?? 0) +
-        Number(feeDetails.Admission_paid ?? 0) +
-        Number(feeDetails.books_paid ?? 0) +
-        Number(feeDetails.uniform_paid ?? 0) +
-        Number(feeDetails.bus_paid ?? 0) +
-        Number(feeDetails.exam_paid ?? 0) +
-        Number(feeDetails.others_paid ?? 0);
-      const totalAmount = Number(feeDetails.Final_Amount ?? feeDetails.CompleteFee ?? 0);
+      const studentFeePayload =
+        studentFeeRes.status === 'fulfilled'
+          ? studentFeeRes.value.data?.data || {}
+          : {};
+      const studentFeeData =
+        studentFeeRes.status === 'fulfilled'
+          ? studentFeeRes.value.data?.feeDetails || studentFeeRes.value.data?.feeDetail || {}
+          : {};
+      const classFeeData =
+        classRes.status === 'fulfilled' ? classRes.value.data?.feeDetail || {} : {};
+      const paymentPayload =
+        paymentRes.status === 'fulfilled' ? paymentRes.value.data?.payments || {} : {};
+      const feeStructureData =
+        feeStructureRes.status === 'fulfilled'
+          ? feeStructureRes.value.data?.feeStructure || feeStructureRes.value.data?.feeDetail || {}
+          : {};
+      const fallbackClassFeeData =
+        classRes.status === 'fulfilled'
+          ? classRes.value.data?.feeDetail || classRes.value.data?.feeStructure || {}
+          : {};
+      const dynamicFeeTypes = dynamicFeeTypesRes.status === 'fulfilled'
+        ? Array.isArray(dynamicFeeTypesRes.value.data?.data)
+          ? dynamicFeeTypesRes.value.data.data
+          : Array.isArray(dynamicFeeTypesRes.value.data)
+          ? dynamicFeeTypesRes.value.data
+          : []
+        : [];
+      const dynamicRows =
+        dynamicRowsRes.status === 'fulfilled' && Array.isArray(dynamicRowsRes.value.data)
+          ? dynamicRowsRes.value.data
+          : [];
 
-      const formatINR = (value: number) =>
-        new Intl.NumberFormat('en-IN', {
-          style: 'currency',
-          currency: 'INR',
-          minimumFractionDigits: 2,
-        }).format(value);
+      const routeFeeData = {
+        ...(studentFeePayload || {}),
+        ...(studentFeePayload?.studentFeeDetails || {}),
+      };
+
+      const paymentSource = {
+        ...(paymentPayload || {}),
+        ...(paymentPayload?.discounts || {}),
+      };
+      Object.entries(paymentPayload?.dynamicFeeTotals || {}).forEach(([key, value]) => {
+        const normalized = normalizeFeeKey(key);
+        if (!normalized) return;
+        paymentSource[normalized] = value;
+      });
+      (Array.isArray(paymentPayload?.feeBreakdown) ? paymentPayload.feeBreakdown : []).forEach((row: any) => {
+        const label = String(row?.label || row?.key || '').trim();
+        const normalized = normalizeFeeKey(label);
+        if (!normalized) return;
+        paymentSource[normalized] = row?.total ?? row?.amount ?? paymentSource[normalized];
+        paymentSource[`${normalized}_paid`] = row?.paid ?? paymentSource[`${normalized}_paid`];
+        paymentSource[`${normalized}_discount`] = row?.discount ?? paymentSource[`${normalized}_discount`];
+        paymentSource[`${normalized}_due`] = row?.due ?? paymentSource[`${normalized}_due`];
+      });
+
+      const feeRows = buildFeeRowsFromSource(
+        paymentSource,
+        Object.keys(feeStructureData || {}).length ? feeStructureData : fallbackClassFeeData || null,
+        dynamicFeeTypes
+      );
+      const summaryRows = feeRows.length
+        ? feeRows
+        : dynamicRows.length
+        ? dynamicRows.map((row: any) => ({
+            amount: Number(row?.CompleteFee || row?.completeFee || row?.Final_Amount || row?.Total_Amount || row?.totalAmount || 0),
+            paid: Number(row?.Paid_Amount || row?.paid_amount || row?.paidAmount || 0),
+            discount: Number(row?.Discount || row?.discount || row?.discountAmount || row?.discount_amount || 0),
+            due: Number(row?.Due_Amount || row?.Total_Due || row?.dueAmount || 0),
+          }))
+        : [];
+
+      const totalAmount = summaryRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const paidAmount = summaryRows.reduce((sum, row) => sum + Number(row.paid || 0), 0);
+      const discountAmount = summaryRows.reduce((sum, row) => sum + Number(row.discount || 0), 0);
+      const dueAmount =
+        summaryRows.length > 0
+          ? summaryRows.reduce((sum, row) => sum + Number(row.due || 0), 0)
+          : Math.max(totalAmount - paidAmount - discountAmount, 0);
 
       setFeeSummary({
         paid: formatINR(paidAmount),
-        due: formatINR(totalAmount - paidAmount),
+        due: formatINR(dueAmount),
         percent: totalAmount > 0 ? String(Math.max(0, Math.min(100, Math.round((paidAmount / totalAmount) * 100)))) : '0',
       });
     } catch (error) {
@@ -820,7 +1196,11 @@ const ParentDashboard = () => {
         return parentTiles.filter((tile) => tile.route === 'ParentLiveChatTicket');
       case 'Events':
         return parentTiles.filter(
-          (tile) => tile.route === 'ParentHomepage' || tile.route === 'ParentCalender' || tile.route === 'ParentPhotos'
+          (tile) =>
+            tile.route === 'ParentHomepage' ||
+            tile.route === 'ParentAnnouncements' ||
+            tile.route === 'ParentCalender' ||
+            tile.route === 'ParentPhotos'
         );
       default:
         return parentTiles;
@@ -837,6 +1217,7 @@ const ParentDashboard = () => {
       'ParentPhotos',
       'ParentLiveChatTicket',
       'ParentHomepage',
+      'ParentAnnouncements',
     ];
 
     return quickOrder
@@ -860,6 +1241,7 @@ const ParentDashboard = () => {
           case 'Events':
             return (
               tile.route === 'ParentHomepage' ||
+              tile.route === 'ParentAnnouncements' ||
               tile.route === 'ParentCalender' ||
               tile.route === 'ParentPhotos'
             );
@@ -968,7 +1350,7 @@ const ParentDashboard = () => {
         value: feeSummary.due,
         subtitle: 'Review payment summary',
         cta: 'Open Fees',
-        image: require('../assets/feesAnimated.png'),
+        image: require('../assets/fees.png'),
         route: 'ParentFees' as ParentModuleRoute,
         accent: '#FFF',
       },
@@ -978,7 +1360,7 @@ const ParentDashboard = () => {
         value: `${attendanceCount} leaves`,
         subtitle: 'Check attendance history',
         cta: 'Open Attendance',
-        image: require('../assets/leaveannimated.png'),
+        image: require('../assets/leaves.png'),
         route: 'ParentAttendance' as ParentModuleRoute,
         accent: '#FFF',
       },
@@ -1218,7 +1600,7 @@ const ParentDashboard = () => {
         ['designation', designation],
         ['userType', 'teacher'],
         ['userDetails', JSON.stringify(teacherProfileCache)],
-        ['lastScreen', 'TeacherAdmissionDashboard'],
+        ['lastScreen', 'TeacherDashboard'],
       ]);
       await cacheTeacherProfile(teacherProfileCache);
 
@@ -1227,7 +1609,7 @@ const ParentDashboard = () => {
         index: 0,
         routes: [
           {
-            name: 'TeacherAdmissionDashboard' as never,
+            name: 'TeacherDashboard' as never,
             params: { username, name },
           },
         ],
@@ -1286,7 +1668,7 @@ const ParentDashboard = () => {
           <View style={styles.phoneFrame}>
             <LinearGradient
               pointerEvents="none"
-              colors={['#07162F', '#112B57', '#1E3F76']}
+                colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.dashboardTopGradient}
@@ -1310,7 +1692,7 @@ const ParentDashboard = () => {
 
             <View style={styles.dashboardHeroCard}>
               <LinearGradient
-                colors={['#0A1D3E', '#163568', '#244B85']}
+colors={['#6826df', '#a174eb','#1A2D4A']}   
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.dashboardHeroGradientCard}
@@ -1563,34 +1945,46 @@ const ParentDashboard = () => {
               </View>
 
               <View style={styles.dashboardGrid}>
-                {dashboardTiles.map((tile) => (
+                {dashboardTiles.map((tile) => {
+                  const tileSubtitle = tile.metaValue
+                    ? `${tile.metaLabel} ${tile.metaValue}`.trim()
+                    : tile.metaLabel;
+
+                  return (
                   <Pressable
                     key={tile.route}
                     onPress={() => handleTilePress(tile.route)}
                     style={[
-                      styles.dashboardGridCard,
-                      selectedModule === tile.route && styles.dashboardGridCardActive,
+                      parentDashboardCardStyles.cardWrapper,
+                      selectedModule === tile.route && parentDashboardCardStyles.cardActive,
                     ]}
                   >
-                    <View style={styles.dashboardGridCornerAccent} />
-                    <View style={styles.gridIconWrap}>
-                      {renderIcon(tile.kind, tile.icon, '#000000', 24)}
-                    </View>
-                    <View style={styles.dashboardGridCardContent}>
-                      <View style={styles.dashboardGridTextBlock}>
-                        <Text style={styles.gridLabel} numberOfLines={2}>
+                    <View style={parentDashboardCardStyles.card}>
+                      <View style={styles.dashboardGridCornerAccent}>
+                        <LinearGradient
+                          colors={['#d2c2eeff', '#a174eb', '#6826df']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.dashboardGridCornerAccentFill}
+                        />
+                      </View>
+                      <View style={parentDashboardCardStyles.iconWrap}>
+                        {renderIcon(tile.kind, tile.icon, '#000000', 30)}
+                      </View>
+                      <View style={parentDashboardCardStyles.cardContent}>
+                        <View style={parentDashboardCardStyles.textBlock}>
+                          <Text style={parentDashboardCardStyles.label} numberOfLines={2}>
                           {tile.label}
-                        </Text>
-                        <Text style={styles.dashboardGridMetaLabel} numberOfLines={1}>
-                          {tile.metaLabel}
-                        </Text>
-                        <Text style={styles.dashboardGridMetaValue} numberOfLines={1}>
-                          {tile.metaValue}
-                        </Text>
+                          </Text>
+                          <Text style={parentDashboardCardStyles.subtitle} numberOfLines={1}>
+                            {tileSubtitle}
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </Pressable>
-                ))}
+                  );
+                })}
               </View>
 
               {/* <ScrollView

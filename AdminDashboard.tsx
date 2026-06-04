@@ -404,6 +404,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                 <Text style={styles.gridLabel}>Leave</Text>
               </Pressable>
 
+              <Pressable
+                style={styles.dashboardGridCard}
+                onPress={() => navigation.navigate('ChiefAnnouncements')}
+              >
+                <View style={styles.gridIconWrap}>
+                  {renderIcon('material', 'campaign', '#7F7F84', 26)}
+                </View>
+                <Text style={styles.gridLabel}>Announcements</Text>
+              </Pressable>
+
     
             </View>
 

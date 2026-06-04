@@ -20,6 +20,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { createAppStyles } from '../App.styles';
 import { ErrorContext } from '../ErrorContext';
 import { RootStackParamList } from '../types';
+import ParentFooter from './ParentFooter';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ParentAcademic'>;
 type AcademicViewProps = Props & { embedded?: boolean };
@@ -238,7 +239,7 @@ const computeTestSummary = (
 };
 
 const ParentAcademic: React.FC<AcademicViewProps> = ({
-  navigation,
+  navigation: _navigation,
   embedded = false,
 }) => {
   const { height, width } = useWindowDimensions();
@@ -355,18 +356,7 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
   ]);
 
   const summary = computeAcademicSummary(performance, testTypes);
-  const termRowsForSummary = (testTypes || []).length
-    ? testTypes
-        .filter((row: any) => row?.key && row?.label)
-        .map((row: any) => ({ key: row.key, label: row.label }))
-    : [
-        { label: 'FA1', key: 'FA1' },
-        { label: 'FA2', key: 'FA2' },
-        { label: 'SA1', key: 'SA1' },
-        { label: 'FA3', key: 'FA3' },
-        { label: 'FA4', key: 'FA4' },
-        { label: 'SA2', key: 'SA2' },
-      ];
+  const termRowsForSummary = useMemo(() => buildTermRows(testTypes), [testTypes]);
   const previousTestRow = termRowsForSummary[termRowsForSummary.length - 1];
   const previousTestSummary = computeTestSummary(performance, previousTestRow?.key, testTypes);
   const subjectOptions = useMemo(
@@ -384,12 +374,6 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     );
     return matchedIndex >= 0 ? performance[matchedIndex] : null;
   }, [performance, trendSubjectKey]);
-  const activeTrendTitle = selectedSubjectRow
-    ? getSubjectDisplayName(
-        selectedSubjectRow,
-        performance.findIndex((subject) => subject === selectedSubjectRow),
-      )
-    : 'All Subjects';
   const chartPoints = buildTrendPoints(
     selectedSubjectRow ? [selectedSubjectRow] : performance,
     termRowsForSummary,
@@ -397,6 +381,12 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
   const chartLabels = chartPoints.map(point => point.label);
   const chartData = chartPoints.map(point => point.value ?? 0);
   const chartWidth = Math.max(width - 48, chartPoints.length * 72);
+  const selectedSubjectName = selectedSubjectRow
+    ? getSubjectDisplayName(
+        selectedSubjectRow,
+        performance.findIndex((subject) => subject === selectedSubjectRow),
+      )
+    : 'All Subjects';
 
   const getDisplayMark = (subj: AcademicSubject, row: any) => {
     const testEntry = subj?.tests?.[row?.key];
@@ -414,6 +404,25 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     return mark ?? '-';
   };
 
+  const selectedSubjectTestRows = useMemo(() => {
+    if (!selectedSubjectRow) return [];
+
+    return termRowsForSummary.map((row) => {
+      const obtainedRaw = getDisplayMark(selectedSubjectRow, row);
+      const obtained = Number(obtainedRaw);
+      const max = getTermMax(selectedSubjectRow, row.key);
+      const percentage = max > 0 && !Number.isNaN(obtained) ? Math.max(0, Math.min(100, (obtained / max) * 100)) : 0;
+
+      return {
+        key: row.key,
+        label: row.label,
+        obtained: Number.isNaN(obtained) ? obtainedRaw : obtained,
+        max,
+        percentage,
+      };
+    });
+  }, [selectedSubjectRow, termRowsForSummary]);
+
   if (loading || !studentData) {
     return (
       <View style={embedded ? styles.embeddedShell : styles.safeArea}>
@@ -428,7 +437,7 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
   const content = (
     <View style={embedded ? styles.embeddedContent : styles.content}>
       <LinearGradient
-        colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+        colors={['#d2c2eeff', '#BFD7FA', '#F6F8FC']}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={styles.academicGradientSection}
@@ -436,15 +445,12 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
         <View style={styles.headerTopRow}>
           <View style={styles.headerLeftColumn}>
             <Text style={styles.title}>Academic</Text>
-            <Text numberOfLines={1} style={styles.subtitle}>
-              {studentData?.name || '-'} {studentData?.class_name || ''}
-            </Text>
+            
           </View>
         </View>
 
         <View style={styles.academicGraphSection}>
           <View style={styles.trendSelectorWrap}>
-            <Text style={styles.trendSelectorLabel}>Choose a subject</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -489,7 +495,7 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
             </ScrollView>
           </View>
 
-          <View style={styles.trendActiveTitleRow}>
+          {/* <View style={styles.trendActiveTitleRow}>
             <Text style={styles.trendActiveTitle}>{activeTrendTitle}</Text>
             {chartPoints.length >= 2 &&
             chartPoints[chartPoints.length - 1].value !== null &&
@@ -521,13 +527,13 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
                 %
               </Text>
             ) : null}
-          </View>
+          </View> */}
 
           <Text style={styles.academicGraphExplain}>
             This line shows the average score in each test. A higher line means better performance.
           </Text>
 
-          <View style={styles.academicLegendRow}>
+          {/* <View style={styles.academicLegendRow}>
             <View style={styles.academicLegendItem}>
               <View style={[styles.academicLegendDot, { backgroundColor: '#F36B79' }]} />
               <Text style={styles.academicLegendText}>Average test score</Text>
@@ -536,12 +542,12 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
               <View style={[styles.academicLegendDot, { backgroundColor: '#E9E9EE' }]} />
               <Text style={styles.academicLegendText}>Each point is one test</Text>
             </View>
-          </View>
+          </View> */}
 
           {chartPoints.length < 2 ? (
-            <View style={styles.academicGraphEmptyPlain}>
-              <Text style={styles.academicGraphEmptyTitlePlain}>Not enough test data yet</Text>
-              <Text style={styles.academicGraphEmptyTextPlain}>
+            <View style={styles.academicGraphEmpty}>
+              <Text style={styles.academicGraphEmptyTitle}>Not enough test data yet</Text>
+              <Text style={styles.academicGraphEmptyText}>
                 Add at least two tests to see how performance changes over time.
               </Text>
             </View>
@@ -595,12 +601,12 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
       </LinearGradient>
 
       <View style={styles.summaryRowTop}>
-        <View style={[appStyles.dashboardGridCard, styles.summaryCardLeft]}>
+        <View style={[appStyles.dashboardGridCard1, styles.summaryCardLeft]}>
           <View style={appStyles.dashboardGridCornerAccent} />
-          <View style={appStyles.gridIconWrap}>
-            <MaterialIcons name="school" size={24} color="#000000" />
+          <View style={appStyles.gridIconWrap1}>
+            <MaterialIcons name="school" size={44} color="#000000" />
           </View>
-          <View style={appStyles.dashboardGridCardContent}>
+          <View style={appStyles.dashboardGridCardContent1}>
             <View style={appStyles.dashboardGridTextBlock}>
               <Text style={appStyles.gridLabel}>Overall</Text>
               <Text style={appStyles.dashboardGridMetaLabel}>{summary.grade}</Text>
@@ -609,12 +615,12 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
           </View>
         </View>
 
-        <View style={[appStyles.dashboardGridCard, styles.summaryCardRight]}>
+        <View style={[appStyles.dashboardGridCard1, styles.summaryCardRight]}>
           <View style={appStyles.dashboardGridCornerAccent} />
-          <View style={appStyles.gridIconWrap}>
-            <MaterialIcons name="quiz" size={24} color="#000000" />
+          <View style={appStyles.gridIconWrap1}>
+            <MaterialIcons name="quiz" size={40} color="#000000" />
           </View>
-          <View style={appStyles.dashboardGridCardContent}>
+          <View style={appStyles.dashboardGridCardContent1}>
             <View style={appStyles.dashboardGridTextBlock}>
               <Text style={appStyles.gridLabel}>Previous Test</Text>
               <Text style={appStyles.dashboardGridMetaLabel}>{previousTestSummary.grade}</Text>
@@ -637,48 +643,108 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
             embedded && styles.embeddedSubjectsPanel,
           ]}
         >
+          <Text style={styles.selectedSubjectHeading}>
+            {trendSubjectKey === '__all__' ? 'All Subjects' : selectedSubjectName}
+          </Text>
+          <Text style={styles.selectedSubjectSubheading}>
+            {trendSubjectKey === '__all__'
+              ? 'Tap any subject above to see its test-wise performance.'
+              : 'Test-wise breakdown for the selected subject.'}
+          </Text>
+
           <ScrollView
             nestedScrollEnabled
             showsVerticalScrollIndicator={false}
             style={styles.subjectsScroll}
             contentContainerStyle={styles.subjectsScrollContent}
           >
-            {performance.map((subject, index) => (
+            {trendSubjectKey === '__all__' ? (
+              performance.map((subject, index) => (
+                <View
+                  key={`${subject.name || 'subj'}-${index}`}
+                  style={[
+                    styles.subjectCard,
+                    {
+                      backgroundColor: index % 2 === 0 ? '#FFF9FB' : '#F7FBFF',
+                      borderLeftColor: ['#EF6574', '#4AC8D8', '#7A3FC5', '#F2D84A'][index % 4],
+                    },
+                  ]}
+                >
+                  <Text style={styles.subjectTitle}>
+                    {getSubjectDisplayName(subject, index)}
+                  </Text>
+                  <View style={styles.rowHeader}>
+                    {termRowsForSummary.map((row: any) => (
+                      <Text key={row.key} style={styles.cellHeader}>
+                        {row.label}
+                      </Text>
+                    ))}
+                  </View>
+                  <View style={styles.rowData}>
+                    {termRowsForSummary.map((row: any) => (
+                      <View key={row.key} style={styles.cell}>
+                        <Text style={styles.cellText}>
+                          {String(getDisplayMark(subject, row))}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))
+            ) : selectedSubjectRow ? (
               <View
-                key={`${subject.name || 'subj'}-${index}`}
                 style={[
                   styles.subjectCard,
                   {
-                    backgroundColor: index % 2 === 0 ? '#FFF9FB' : '#F7FBFF',
-                    borderLeftColor: ['#EF6574', '#4AC8D8', '#7A3FC5', '#F2D84A'][index % 4],
+                    backgroundColor: '#FFF9FB',
+                    borderLeftColor: '#7A3FC5',
                   },
                 ]}
               >
-                <Text style={styles.subjectTitle}>
-                  {getSubjectDisplayName(subject, index)}
+              <Text style={styles.subjectTitle}>
+                  {selectedSubjectName}
                 </Text>
-                <View style={styles.rowHeader}>
-                  {termRowsForSummary.map((row: any) => (
-                    <Text key={row.key} style={styles.cellHeader}>
-                      {row.label}
-                    </Text>
-                  ))}
-                </View>
-                <View style={styles.rowData}>
-                  {termRowsForSummary.map((row: any) => (
-                    <View key={row.key} style={styles.cell}>
-                      <Text style={styles.cellText}>
-                        {String(getDisplayMark(subject, row))}
-                      </Text>
-                    </View>
-                  ))}
+                <Text style={styles.subjectTestGraphCaption}>
+                  Each row shows the test type on the left and the score graph on the right.
+                </Text>
+                <View style={styles.subjectTestList}>
+                  {selectedSubjectTestRows.map((item) => {
+                    const scoreText = `${String(item.obtained)} / ${item.max}`;
+                    return (
+                      <View key={item.key} style={styles.subjectTestRow}>
+                        <View style={styles.subjectTestInfo}>
+                          <Text style={styles.subjectTestLabel} numberOfLines={1}>
+                            {item.label}
+                          </Text>
+                          <Text style={styles.subjectTestScore}>{scoreText}</Text>
+                        </View>
+
+                        <View style={styles.subjectTestGraphWrap}>
+                          <View style={styles.subjectTestTrack}>
+                            <LinearGradient
+                              colors={['#a57aef', '#a174eb', '#6826df']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 0 }}
+                              style={[
+                                styles.subjectTestFill,
+                                {
+                                  width: `${Math.max(item.percentage, 8)}%`,
+                                },
+                              ]}
+                            />
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
-            ))}
+            ) : null}
           </ScrollView>
         </View>
       )}
 
+      <ParentFooter embedded={embedded} />
     </View>
   );
 
@@ -722,7 +788,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginBottom: 12,
   },
-  title: { fontSize: 26, fontWeight: '800', color: '#111' },
+  title: { fontSize: 16, fontWeight: '800', color: '#111' },
   subtitle: {
     marginTop: 4,
     fontSize: 13,
@@ -753,6 +819,19 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: '#444',
     marginBottom: 8,
+  },
+  selectedSubjectHeading: {
+    fontSize: 16,
+    lineHeight: 20,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  selectedSubjectSubheading: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: '#6B7280',
+    marginBottom: 10,
   },
   academicLegendRow: {
     flexDirection: 'row',
@@ -873,14 +952,16 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   subjectsPanel: {
-    backgroundColor: '#f6f6f7',
+    backgroundColor: '#fff',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#f6f6f7',
+    borderColor: '#fff',
     padding: 12,
     marginBottom: 12,
     flex: 1,
     minHeight: 0,
+    marginTop: 0,
+    paddingTop: 0,
   },
   embeddedSubjectsPanel: {
     padding: 0,
@@ -910,6 +991,56 @@ const styles = StyleSheet.create({
     color: '#111',
     marginBottom: 10,
   },
+  subjectTestGraphCaption: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  subjectTestLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#7A3FC5',
+    marginBottom: 4,
+  },
+  subjectTestScore: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  subjectTestList: {
+    gap: 10,
+  },
+  subjectTestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#EEEAF9',
+  },
+  subjectTestInfo: {
+    width: 88,
+    flexShrink: 0,
+  },
+  subjectTestGraphWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  subjectTestTrack: {
+    width: '100%',
+    height: 14,
+    borderRadius: 999,
+    backgroundColor: '#ECE8F7',
+    overflow: 'hidden',
+  },
+  subjectTestFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
   rowHeader: { flexDirection: 'row', marginBottom: 8 },
   rowData: { flexDirection: 'row' },
   cellHeader: {
@@ -929,6 +1060,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cellText: { fontSize: 12, fontWeight: '700', color: '#111' },
+  cellSubText: { marginTop: 2, fontSize: 10, color: '#6B7280', fontWeight: '700' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#555' },
   emptyText: { textAlign: 'center', color: '#666', marginTop: 20 },

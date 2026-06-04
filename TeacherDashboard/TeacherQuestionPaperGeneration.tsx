@@ -23,6 +23,7 @@ import ticketIcon from '../icons/application.png'
 import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
+import TeacherFooter from './TeacherFooter';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const scaleFont = (size: number) => (SCREEN_WIDTH / 375) * size;
 /* ---------------- TYPES ---------------- */
@@ -532,6 +533,7 @@ const modalStyles = StyleSheet.create({
     </View>
   </TouchableWithoutFeedback>
 </Modal>
+      <TeacherFooter />
     </SafeAreaView>
   );
 };

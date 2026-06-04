@@ -19,6 +19,8 @@ import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -35,22 +37,27 @@ const local = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 60,
     marginBottom: 12,
   },
   summaryCard: {
     flex: 1,
-    minHeight: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 3,
   },
   summaryCardLeft: {
     marginRight: 4,
@@ -666,14 +673,13 @@ const summaryCards = [
     <View style={styles.container}>
       <View style={local.summaryRow}>
         {summaryCards.map((card, index) => (
-          <View
-            key={`${card.title}-${index}`}
-            style={[
-              local.summaryCard,
-              index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-              { backgroundColor: card.background },
-            ]}
-          >
+              <TeacherSummaryCard
+                key={`${card.title}-${index}`}
+                style={[
+                  local.summaryCard,
+                  index === 0 ? local.summaryCardLeft : local.summaryCardRight,
+                ]}
+              >
             <View style={local.summaryText}>
               <View style={local.summaryTitleRow}>
                 <Text style={local.summaryNumber}>{card.title}</Text>
@@ -684,9 +690,9 @@ const summaryCards = [
             <View style={local.summaryIconWrap}>
               <Ionicons name={card.icon as any} size={28} color="#4C4C4C" />
             </View>
+              </TeacherSummaryCard>
+            ))}
           </View>
-        ))}
-      </View>
 
       <View style={styles.syllabusContainerCalenders}>
         <ScrollView
@@ -910,6 +916,7 @@ const summaryCards = [
       </View>
     </View>
   </ScrollView>
+      <TeacherFooter />
 </View>
   );
 };

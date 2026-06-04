@@ -21,10 +21,9 @@ import ticketIcon from '../icons/application.png';
 import RNFS from 'react-native-fs';
 import axios from 'axios';
 
-import Header from '../ChiefHeader';
-import Footer from '../Footer';
-import FooterLogo from '../Footerlogo';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
+import TeacherFooter from './TeacherFooter';
+import TeacherSummaryCard from './TeacherSummaryCard';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const API_BASE = 'http://162.215.210.38:3010/api';
@@ -168,12 +167,11 @@ const TeacherEventMediaUpload: React.FC<
         <View style={local.container}>
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
-              <View
+              <TeacherSummaryCard
                 key={`${card.subtitle}-${index}`}
                 style={[
-                  local.summaryCard,
                   index === 0 ? local.summaryCardLeft : local.summaryCardRight,
-                  { backgroundColor: card.background },
+                  { flex: 1 },
                 ]}
               >
                 <View style={local.summaryText}>
@@ -192,7 +190,7 @@ const TeacherEventMediaUpload: React.FC<
                 <View style={local.summaryIconWrap}>
                   <Ionicons name={card.icon as any} size={28} color="#4C4C4C" />
                 </View>
-              </View>
+              </TeacherSummaryCard>
             ))}
           </View>
 
@@ -278,16 +276,11 @@ const TeacherEventMediaUpload: React.FC<
                 )}
               </ScrollView>
             </View>
-            <View style={local.footerWrapper}>
-              <Footer />
-            </View>
           </View>
         </View>
       </ScrollView>
 
-      <View style={local.footerLogoWrap}>
-        <FooterLogo />
-      </View>
+      <TeacherFooter />
     </SafeAreaView>
   );
 };
@@ -311,25 +304,20 @@ const local = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginTop: 60,
     paddingHorizontal: 12,
     paddingTop: 6,
     paddingBottom: 8,
   },
   summaryCard: {
     flex: 1,
-    height: 108,
+    minHeight: 92,
     borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
   summaryCardLeft: {
     marginRight: 4,

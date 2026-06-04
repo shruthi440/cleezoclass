@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   Image,
   ImageSourcePropType,
   Modal,
   Pressable,
   ScrollView,
+  StyleSheet,
   StatusBar,
   Text,
-  ActivityIndicator,
   useWindowDimensions,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import axios from 'axios';
+import LinearGradient from 'react-native-linear-gradient';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
@@ -25,26 +28,12 @@ import {
   stopPersistentAttendanceTracking,
 } from './AttendanceService';
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
-import TeacherAttendance from './TeacherAttendance';
-import TeacherBehaviour from './TeacherBehaviour';
-import TeacherTimetable from './TeacherTimetable';
-import TeacherEventMediaUpload from './TeacherEventMediaUpload';
-import TeacherTickets from './TeacherTickets';
-import TeacherSalary from './TeacherSalary';
-import TeacherCalender from './TeacherCalender';
-import TeacherDetails from './TeacherDetails';
-import TeacherHomework from './TeacherHomework';
-import TopicOfDay from './TopicOfDay';
-import TeacherQuestionPaperGeneration from './TeacherQuestionPaperGeneration';
-import HandwritingScanPull from './Scan&Pull';
-import TeacherLeaveRequest from './TeacherLeaveRequest';
-import TeacherChatAndEvents from './TeacherChatAndEvents';
-import TeacherCounselling from './Teacher_Councelling';
 
 type IconKind = 'material' | 'fontawesome';
 
 type DashboardTile = {
   label: string;
+  subtitle: string;
   icon: string;
   kind: IconKind;
 };
@@ -64,29 +53,209 @@ type AttendanceSnapshot = {
   lastUpdated: string;
 };
 
-const heroImage: ImageSourcePropType = require('../assets/dashboard.png');
 const logoImage: ImageSourcePropType = require('../assets/Cleezo.png');
+const backArrowImage: ImageSourcePropType = require('../assets/Arrow.png');
 const REMINDER_NOTIFICATION_CHANNEL_ID = 'reminders';
+const teacherPhotoUploadBase = 'https://cleezoclass.com:4000/CRM/public/uploads';
 
-const topChips = ['Daily Routines'];
+const decodeHexText = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const hex = raw.startsWith('0x') ? raw.slice(2) : raw;
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return raw;
+
+  try {
+    const bufferCtor = (globalThis as any).Buffer;
+    if (bufferCtor?.from) {
+      return bufferCtor.from(hex, 'hex').toString('utf8');
+    }
+  } catch {}
+
+  return raw;
+};
+
+const decodeBase64Text = (value: string) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  try {
+    const atobFn = (globalThis as any).atob;
+    if (typeof atobFn === 'function') {
+      return atobFn(raw);
+    }
+  } catch {}
+
+  try {
+    const bufferCtor = (globalThis as any).Buffer;
+    if (bufferCtor?.from) {
+      return bufferCtor.from(raw, 'base64').toString('utf8');
+    }
+  } catch {}
+
+  return '';
+};
+
+const resolveTeacherPhotoUri = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const decoded = decodeHexText(raw);
+  const normalized = String(decoded || raw).trim();
+  if (!normalized) return '';
+  if (normalized.startsWith('data:image')) {
+    const base64Part = normalized.split(',')[1] || '';
+    const decodedPath = String(decodeBase64Text(base64Part) || '').trim();
+    if (
+      decodedPath.includes('CRM/public/uploads') ||
+      decodedPath.startsWith('/uploads/') ||
+      decodedPath.startsWith('uploads/')
+    ) {
+      const stripped = decodedPath.replace(/^\/+/, '');
+      const relativePath = stripped
+        .replace(/^CRM\/public\/uploads\/?/i, '')
+        .replace(/^uploads\/?/i, '')
+        .replace(/^\/+/, '');
+      return `${teacherPhotoUploadBase}/${relativePath}`;
+    }
+
+    if (decodedPath.startsWith('http://') || decodedPath.startsWith('https://')) {
+      return decodedPath;
+    }
+
+    return normalized;
+  }
+  if (normalized.startsWith('http://') || normalized.startsWith('https://')) return normalized;
+
+  const stripped = normalized.replace(/^\/+/, '');
+  if (stripped.includes('CRM/public/uploads') || stripped.startsWith('uploads/')) {
+    const relativePath = stripped
+      .replace(/^CRM\/public\/uploads\/?/i, '')
+      .replace(/^uploads\/?/i, '')
+      .replace(/^\/+/, '');
+    return `${teacherPhotoUploadBase}/${relativePath}`;
+  }
+
+  return normalized;
+};
 
 const dashboardTilesMap: Record<string, DashboardTile[]> = {
   'Daily Routines': [
-    { label: 'Attendance', icon: 'how-to-reg', kind: 'material' },
-    { label: 'Homework', icon: 'assignment', kind: 'material' },
-    { label: 'Time table', icon: 'schedule', kind: 'material' },
-    { label: 'Topic of day', icon: 'today', kind: 'material' },
-    { label: 'Behaviour', icon: 'person', kind: 'material' },
-    { label: 'Photo', icon: 'photo-library', kind: 'material' },
-    { label: 'Calendar', icon: 'event', kind: 'material' },
-    { label: 'Scan', icon: 'qr-code-scanner', kind: 'material' },
-    { label: 'Salary', icon: 'payments', kind: 'material' },
-    { label: 'Leave', icon: 'event-busy', kind: 'material' },
-    { label: 'Chat', icon: 'chat', kind: 'material' },
+    { label: 'Attendance', subtitle: 'Mark class presence', icon: 'how-to-reg', kind: 'material' },
+    { label: 'Homework', subtitle: 'Assign daily work', icon: 'assignment', kind: 'material' },
+    { label: 'Time table', subtitle: 'Check schedule', icon: 'schedule', kind: 'material' },
+    { label: 'Topic of day', subtitle: 'Share today topic', icon: 'today', kind: 'material' },
+    { label: 'Behaviour', subtitle: 'Track student conduct', icon: 'person', kind: 'material' },
+    { label: 'Photo', subtitle: 'Upload media', icon: 'photo-library', kind: 'material' },
+    { label: 'Calendar', subtitle: 'Plan events', icon: 'event', kind: 'material' },
+    { label: 'Scan', subtitle: 'Scan QR code', icon: 'qr-code-scanner', kind: 'material' },
+    { label: 'Salary', subtitle: 'View salary info', icon: 'payments', kind: 'material' },
+    { label: 'Leave', subtitle: 'Leave requests', icon: 'event-busy', kind: 'material' },
+    { label: 'Chat', subtitle: 'Message updates', icon: 'chat', kind: 'material' },
+    { label: 'Announcements', subtitle: 'School updates', icon: 'campaign', kind: 'material' },
     // { label: 'Student Report', icon: 'description', kind: 'material' },
   ],
 
 };
+
+const teacherDashboardCardStyles = StyleSheet.create({
+  summaryActionCard: {
+    backgroundColor: '#FFF',
+  },
+  cardWrapper: {
+    width: '46.6%',
+    minHeight: 112,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    marginBottom: 12,
+    overflow: 'visible',
+  },
+  card: {
+    width: '100%',
+    minHeight: 112,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.2,
+    borderColor: '#D8DDE6',
+    position: 'relative',
+    overflow: 'hidden',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  cardActive: {
+    borderColor: '#B59BF4',
+  },
+  cornerAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 34,
+    height: 112,
+    overflow: 'hidden',
+    borderTopLeftRadius: 0,
+    borderBottomRightRadius: 80,
+    backgroundColor: 'transparent',
+  },
+  iconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'transparent',
+    marginBottom: 0,
+  },
+  cardContent: {
+    width: '100%',
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'flex-end',
+    paddingTop: 0,
+  },
+  textBlock: {
+    flex: 1,
+    minWidth: 0,
+    width: '100%',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+    paddingTop: 44,
+    paddingBottom: 12,
+    paddingHorizontal: 14,
+  },
+  label: {
+    fontSize: 14,
+    textAlign: 'right',
+    fontWeight: '800',
+    color: '#222222',
+    lineHeight: 17,
+    marginTop: 8,
+    marginBottom: 0,
+    paddingHorizontal: 4,
+  },
+  subtitle: {
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'right',
+    color: '#6C6C74',
+    fontWeight: '600',
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+});
 
 const renderIcon = (kind: IconKind, name: string, color: string, size: number) => {
   if (kind === 'fontawesome') {
@@ -105,18 +274,19 @@ const triggerAttendanceNotification = async (username: string, schoolCode: strin
     const today = now.toDateString();
     if (lastShown === today) return;
 
-    const response = await fetch(
-      `http://162.215.210.38:3010/api/teacher-attendance-alert?username=${username}&schoolCode=${schoolCode}`
-    );
+    const url = `http://162.215.210.38:3010/api/teacher-attendance-alert?username=${username}&schoolCode=${schoolCode}`;
+    const response = await fetch(url);
 
     if (!response.ok) {
-      console.error(
-        `Attendance notification fetch failed: ${response.status} ${response.statusText}`
-      );
       return;
     }
 
-    const data = await response.json();
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
     if (!data || !data.alert) return;
 
     const errors: string[] = [];
@@ -170,7 +340,6 @@ const triggerAttendanceNotification = async (username: string, schoolCode: strin
 
     await AsyncStorage.setItem('lastAttendanceNotification', today);
   } catch (error) {
-    console.error('Attendance notification error:', error);
   }
 };
 
@@ -183,24 +352,24 @@ const triggerHomeworkNotification = async (username: string, schoolCode: string)
     const today = now.toDateString();
     if (lastShown === today) return;
 
-    const response = await fetch(
-      `http://162.215.210.38:3010/api/check-homework/${username}?schoolCode=${schoolCode}`,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'user-type': 'teacher',
-        },
-      }
-    );
+    const url = `http://162.215.210.38:3010/api/check-homework/${username}?schoolCode=${schoolCode}`;
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'user-type': 'teacher',
+      },
+    });
 
     if (!response.ok) {
-      console.error(
-        `Homework notification fetch failed: ${response.status} ${response.statusText}`
-      );
       return;
     }
 
-    const data = await response.json();
+    let data: any = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
     if (!data?.alert) return;
 
     await notifee.displayNotification({
@@ -215,7 +384,6 @@ const triggerHomeworkNotification = async (username: string, schoolCode: string)
 
     await AsyncStorage.setItem('lastHomeworkNotification', today);
   } catch (error) {
-    console.error('Homework notification error:', error);
   }
 };
 
@@ -229,18 +397,48 @@ type TeacherProfile = {
   subject: string;
   teacherId: string;
   email: string;
+  photoUrl: string;
+  photo: string;
+  teachesToClasses: string[];
+  teaches_to_1?: number | null;
+  teaches_to_2?: number | null;
+  teaches_to_3?: number | null;
+  teaches_to_4?: number | null;
+  teaches_to_5?: number | null;
+  teaches_to_6?: number | null;
+  teaches_to_7?: number | null;
+  teaches_to_8?: number | null;
+  teaches_to_9?: number | null;
+  teaches_to_10?: number | null;
 };
 
 type TeacherDashboardParams = {
   username?: string;
   name?: string;
   moduleLabel?: string;
+  openProfilePanel?: boolean;
 };
 
 type RootStackParamList = {
   TeacherAdmissionDashboard: TeacherDashboardParams | undefined;
   TeacherDashboard: TeacherDashboardParams | undefined;
   TeacherAttendance: TeacherDashboardParams | undefined;
+  TeacherBehaviour: TeacherDashboardParams | undefined;
+  TeacherTimetable: TeacherDashboardParams | undefined;
+  TeacherEventMediaUpload: TeacherDashboardParams | undefined;
+  TeacherSalary: TeacherDashboardParams | undefined;
+  TeacherCalender: TeacherDashboardParams | undefined;
+  TeacherHomework: TeacherDashboardParams | undefined;
+  TopicOfDay: TeacherDashboardParams | undefined;
+  TeacherLeaveRequest: TeacherDashboardParams | undefined;
+  TeacherChatAndEvents: TeacherDashboardParams | undefined;
+  TeacherTickets: TeacherDashboardParams | undefined;
+  TeacherDetails: TeacherDashboardParams | undefined;
+  TeacherQuestionPaperGeneration: TeacherDashboardParams | undefined;
+  TeacherCounselling: TeacherDashboardParams | undefined;
+  TeacherAnnouncements: TeacherDashboardParams | undefined;
+  ScanPull: undefined;
+  ParentDashboard: { username?: string; name?: string } | undefined;
   TeacherLogin: undefined;
 };
 
@@ -252,18 +450,11 @@ const TeacherDashboard = () => {
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
   const phoneHeight = Math.min(Math.max(height - 24, 720), 860);
   const styles = createAppStyles({ phoneWidth, phoneHeight });
-  const [selectedChip, setSelectedChip] = useState(topChips[0]);
+  const summaryImageAnimValues = useRef([new Animated.Value(0), new Animated.Value(0)]);
   const [selectedModule, setSelectedModule] = useState('Attendance');
-  const scrollRef = useRef<ScrollView | null>(null);
-  const moduleOffsetsRef = useRef<Record<string, number>>({});
-  const pendingScrollModuleRef = useRef<string | null>(null);
-  const currentModuleRef = useRef('Attendance');
-  const moduleHistoryRef = useRef<string[]>(['Attendance']);
-  const [snapOffsets, setSnapOffsets] = useState<number[]>([0]);
   const [showTeacherDetails, setShowTeacherDetails] = useState(false);
   const [showAccountSwitchOptions, setShowAccountSwitchOptions] = useState(false);
   const [showNextClassReport, setShowNextClassReport] = useState(false);
-  const [showFooterNav, setShowFooterNav] = useState(false);
   const [schoolLogo, setSchoolLogo] = useState('');
   const [parentProfileCache, setParentProfileCache] = useState<Record<string, any> | null>(null);
   const [attendanceSnapshot, setAttendanceSnapshot] = useState<AttendanceSnapshot>({
@@ -283,17 +474,54 @@ const TeacherDashboard = () => {
     subject: '',
     teacherId: '',
     email: '',
+    photoUrl: '',
+    photo: '',
+    teachesToClasses: [],
   });
   const normalizeText = (value: any) =>
     String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
   const normalizePhone = (value: any) => String(value ?? '').replace(/\D/g, '');
+  const extractTeacherClasses = (source: Record<string, any> | undefined | null) => {
+    const directClasses = Array.isArray(source?.teachesToClasses)
+      ? source.teachesToClasses
+      : Array.isArray(source?.teaches_to_classes)
+        ? source.teaches_to_classes
+        : [];
+
+    const normalizedDirectClasses = directClasses
+      .map((value) => String(value ?? '').trim())
+      .filter((value) => value !== '' && value !== '0');
+
+    if (normalizedDirectClasses.length > 0) {
+      return normalizedDirectClasses;
+    }
+
+    const classValues = [
+      source?.teaches_to_1,
+      source?.teaches_to_2,
+      source?.teaches_to_3,
+      source?.teaches_to_4,
+      source?.teaches_to_5,
+      source?.teaches_to_6,
+      source?.teaches_to_7,
+      source?.teaches_to_8,
+      source?.teaches_to_9,
+      source?.teaches_to_10,
+    ];
+
+    return classValues
+      .filter((value) => value !== null && value !== undefined && String(value).trim() !== '' && Number(value) !== 0)
+      .map((value) => String(value).trim());
+  };
 
   useEffect(() => {
     setProfileReady(false);
     const loadTeacherProfile = async () => {
       try {
         const storedUserDetailsRaw = await AsyncStorage.getItem('userDetails');
+        const storedTeacherProfileRaw = await AsyncStorage.getItem('teacherProfile');
         const storedUserDetails = storedUserDetailsRaw ? JSON.parse(storedUserDetailsRaw) : {};
+        const storedTeacherProfile = storedTeacherProfileRaw ? JSON.parse(storedTeacherProfileRaw) : {};
         const storedUsername = await AsyncStorage.getItem('username');
         const storedName = await AsyncStorage.getItem('name');
         const storedDesignation = await AsyncStorage.getItem('designation');
@@ -301,83 +529,201 @@ const TeacherDashboard = () => {
         const storedUserType = await AsyncStorage.getItem('userType');
         const params = route.params ?? {};
 
+        const resolvedUsername =
+          params.username ||
+          storedUserDetails.username ||
+          storedUserDetails.user_name ||
+          storedTeacherProfile.username ||
+          storedUsername ||
+          '';
+        const resolvedName =
+          params.name ||
+          storedUserDetails.name ||
+          storedUserDetails.teacher_name ||
+          storedTeacherProfile.name ||
+          storedName ||
+          '';
+        const resolvedDesignation =
+          storedUserDetails.designation ||
+          storedTeacherProfile.designation ||
+          storedDesignation ||
+          storedUserDetails.role ||
+          '';
+        const resolvedSchoolCode = String(
+          storedUserDetails.schoolCode ||
+            storedTeacherProfile.schoolCode ||
+            storedSchoolCode ||
+            '',
+        );
+        const resolvedUserType = String(
+          storedUserDetails.userType ||
+            storedTeacherProfile.userType ||
+            storedUserType ||
+            '',
+        );
+        const resolvedPhoneNo = String(
+          storedUserDetails.phone_no ||
+            storedUserDetails.phoneNo ||
+            storedUserDetails.mobile_number ||
+            storedUserDetails.contact_no ||
+            storedTeacherProfile.phoneNo ||
+            '',
+        );
+        const resolvedSubject = String(
+          storedUserDetails.subject ||
+            storedUserDetails.class_name ||
+            storedUserDetails.department ||
+            storedTeacherProfile.subject ||
+            '',
+        );
+        const resolvedTeacherId = String(
+          storedUserDetails.teacher_id ||
+            storedUserDetails.id ||
+            storedTeacherProfile.teacherId ||
+            '',
+        );
+        const resolvedEmail = String(
+          storedUserDetails.email_id ||
+            storedUserDetails.email ||
+            storedTeacherProfile.email ||
+            '',
+        );
+        const resolvedPhotoUrl = resolveTeacherPhotoUri(
+          storedUserDetails.photoUrl ||
+            storedUserDetails.photo ||
+            storedTeacherProfile.photoUrl ||
+            storedTeacherProfile.photo ||
+            '',
+        );
+        const resolvedTeachesToClasses = extractTeacherClasses({
+          ...storedUserDetails,
+          ...storedTeacherProfile,
+        });
+
         setTeacherProfile({
-          username:
-            params.username ||
-            storedUserDetails.username ||
-            storedUserDetails.user_name ||
-            storedUsername ||
-            '',
-          name:
-            params.name ||
-            storedUserDetails.name ||
-            storedUserDetails.teacher_name ||
-            storedName ||
-            '',
-          designation:
-            storedUserDetails.designation ||
-            storedDesignation ||
-            storedUserDetails.role ||
-            '',
-          schoolCode: String(storedUserDetails.schoolCode || storedSchoolCode || ''),
-          userType: String(storedUserDetails.userType || storedUserType || ''),
-          phoneNo: String(
-            storedUserDetails.phone_no ||
-              storedUserDetails.phoneNo ||
-              storedUserDetails.mobile_number ||
-              storedUserDetails.contact_no ||
-              ''
+          username: resolvedUsername,
+          name: resolvedName,
+          designation: resolvedDesignation,
+          schoolCode: resolvedSchoolCode,
+          userType: resolvedUserType,
+          phoneNo: resolvedPhoneNo,
+          subject: resolvedSubject,
+          teacherId: resolvedTeacherId,
+          email: resolvedEmail,
+          photoUrl: resolvedPhotoUrl,
+          photo: String(
+            storedUserDetails.photo ||
+              storedUserDetails.photoUrl ||
+              storedTeacherProfile.photo ||
+              storedTeacherProfile.photoUrl ||
+              '',
           ),
-          subject: String(
-            storedUserDetails.subject ||
-              storedUserDetails.class_name ||
-              storedUserDetails.department ||
-              ''
-          ),
-          teacherId: String(storedUserDetails.teacher_id || storedUserDetails.id || ''),
-          email: String(storedUserDetails.email_id || storedUserDetails.email || ''),
+          teachesToClasses: resolvedTeachesToClasses,
+          teaches_to_1: storedTeacherProfile.teaches_to_1 ?? storedUserDetails.teaches_to_1 ?? null,
+          teaches_to_2: storedTeacherProfile.teaches_to_2 ?? storedUserDetails.teaches_to_2 ?? null,
+          teaches_to_3: storedTeacherProfile.teaches_to_3 ?? storedUserDetails.teaches_to_3 ?? null,
+          teaches_to_4: storedTeacherProfile.teaches_to_4 ?? storedUserDetails.teaches_to_4 ?? null,
+          teaches_to_5: storedTeacherProfile.teaches_to_5 ?? storedUserDetails.teaches_to_5 ?? null,
+          teaches_to_6: storedTeacherProfile.teaches_to_6 ?? storedUserDetails.teaches_to_6 ?? null,
+          teaches_to_7: storedTeacherProfile.teaches_to_7 ?? storedUserDetails.teaches_to_7 ?? null,
+          teaches_to_8: storedTeacherProfile.teaches_to_8 ?? storedUserDetails.teaches_to_8 ?? null,
+          teaches_to_9: storedTeacherProfile.teaches_to_9 ?? storedUserDetails.teaches_to_9 ?? null,
+          teaches_to_10: storedTeacherProfile.teaches_to_10 ?? storedUserDetails.teaches_to_10 ?? null,
         });
 
         const cachedTeacherProfile = {
-          username:
-            params.username ||
-            storedUserDetails.username ||
-            storedUserDetails.user_name ||
-            storedUsername ||
-            '',
-          name:
-            params.name ||
-            storedUserDetails.name ||
-            storedUserDetails.teacher_name ||
-            storedName ||
-            '',
-          designation:
-            storedUserDetails.designation ||
-            storedDesignation ||
-            storedUserDetails.role ||
-            '',
-          schoolCode: String(storedUserDetails.schoolCode || storedSchoolCode || ''),
-          userType: String(storedUserDetails.userType || storedUserType || ''),
-          phoneNo: String(
-            storedUserDetails.phone_no ||
-              storedUserDetails.phoneNo ||
-              storedUserDetails.mobile_number ||
-              storedUserDetails.contact_no ||
-              ''
+          username: resolvedUsername,
+          name: resolvedName,
+          designation: resolvedDesignation,
+          schoolCode: resolvedSchoolCode,
+          userType: resolvedUserType,
+          phoneNo: resolvedPhoneNo,
+          subject: resolvedSubject,
+          teacherId: resolvedTeacherId,
+          email: resolvedEmail,
+          photoUrl: resolvedPhotoUrl,
+          photo: String(
+            storedUserDetails.photo ||
+              storedUserDetails.photoUrl ||
+              storedTeacherProfile.photo ||
+              storedTeacherProfile.photoUrl ||
+              '',
           ),
-          subject: String(
-            storedUserDetails.subject ||
-              storedUserDetails.class_name ||
-              storedUserDetails.department ||
-              ''
-          ),
-          teacherId: String(storedUserDetails.teacher_id || storedUserDetails.id || ''),
-          email: String(storedUserDetails.email_id || storedUserDetails.email || ''),
+          teachesToClasses: resolvedTeachesToClasses,
+          teaches_to_1: storedTeacherProfile.teaches_to_1 ?? storedUserDetails.teaches_to_1 ?? null,
+          teaches_to_2: storedTeacherProfile.teaches_to_2 ?? storedUserDetails.teaches_to_2 ?? null,
+          teaches_to_3: storedTeacherProfile.teaches_to_3 ?? storedUserDetails.teaches_to_3 ?? null,
+          teaches_to_4: storedTeacherProfile.teaches_to_4 ?? storedUserDetails.teaches_to_4 ?? null,
+          teaches_to_5: storedTeacherProfile.teaches_to_5 ?? storedUserDetails.teaches_to_5 ?? null,
+          teaches_to_6: storedTeacherProfile.teaches_to_6 ?? storedUserDetails.teaches_to_6 ?? null,
+          teaches_to_7: storedTeacherProfile.teaches_to_7 ?? storedUserDetails.teaches_to_7 ?? null,
+          teaches_to_8: storedTeacherProfile.teaches_to_8 ?? storedUserDetails.teaches_to_8 ?? null,
+          teaches_to_9: storedTeacherProfile.teaches_to_9 ?? storedUserDetails.teaches_to_9 ?? null,
+          teaches_to_10: storedTeacherProfile.teaches_to_10 ?? storedUserDetails.teaches_to_10 ?? null,
         };
 
         await AsyncStorage.setItem('teacherProfile', JSON.stringify(cachedTeacherProfile));
+
+        if (resolvedUsername && resolvedSchoolCode) {
+          try {
+            const profileUrl = 'http://162.215.210.38:3010/api/teacher/profile';
+            const profileResponse = await axios.get(profileUrl, {
+              params: {
+                username: resolvedUsername,
+                schoolCode: resolvedSchoolCode,
+              },
+              timeout: 15000,
+            });
+
+            const apiTeacher = profileResponse.data?.teacher || profileResponse.data?.data || {};
+            const apiTeachesToClasses = extractTeacherClasses(apiTeacher);
+            const apiMergedProfile = {
+              username: String(apiTeacher.username || resolvedUsername || ''),
+              name: String(apiTeacher.name || resolvedName || ''),
+              designation: String(apiTeacher.designation || resolvedDesignation || ''),
+              schoolCode: String(apiTeacher.schoolCode || resolvedSchoolCode || ''),
+              userType: String(apiTeacher.userType || resolvedUserType || ''),
+              phoneNo: String(
+                apiTeacher.phone_no ||
+                  apiTeacher.phoneNo ||
+                  apiTeacher.mobile_number ||
+                  apiTeacher.contact_no ||
+                  resolvedPhoneNo ||
+                  '',
+              ),
+              subject: String(apiTeacher.subject || resolvedSubject || ''),
+              teacherId: String(apiTeacher.teacher_id || apiTeacher.id || resolvedTeacherId || ''),
+              email: String(apiTeacher.email_id || apiTeacher.email || resolvedEmail || ''),
+              photoUrl: resolveTeacherPhotoUri(
+                apiTeacher.photoUrl ||
+                  apiTeacher.photo ||
+                  apiTeacher.photo_url ||
+                  resolvedPhotoUrl ||
+                  '',
+              ),
+              photo: String(apiTeacher.photo || apiTeacher.photoUrl || apiTeacher.photo_url || ''),
+              teachesToClasses: apiTeachesToClasses.length ? apiTeachesToClasses : resolvedTeachesToClasses,
+              teaches_to_1: apiTeacher.teaches_to_1 ?? storedTeacherProfile.teaches_to_1 ?? null,
+              teaches_to_2: apiTeacher.teaches_to_2 ?? storedTeacherProfile.teaches_to_2 ?? null,
+              teaches_to_3: apiTeacher.teaches_to_3 ?? storedTeacherProfile.teaches_to_3 ?? null,
+              teaches_to_4: apiTeacher.teaches_to_4 ?? storedTeacherProfile.teaches_to_4 ?? null,
+              teaches_to_5: apiTeacher.teaches_to_5 ?? storedTeacherProfile.teaches_to_5 ?? null,
+              teaches_to_6: apiTeacher.teaches_to_6 ?? storedTeacherProfile.teaches_to_6 ?? null,
+              teaches_to_7: apiTeacher.teaches_to_7 ?? storedTeacherProfile.teaches_to_7 ?? null,
+              teaches_to_8: apiTeacher.teaches_to_8 ?? storedTeacherProfile.teaches_to_8 ?? null,
+              teaches_to_9: apiTeacher.teaches_to_9 ?? storedTeacherProfile.teaches_to_9 ?? null,
+              teaches_to_10: apiTeacher.teaches_to_10 ?? storedTeacherProfile.teaches_to_10 ?? null,
+            };
+
+            setTeacherProfile((prev) => {
+              return { ...prev, ...apiMergedProfile };
+            });
+
+            await AsyncStorage.setItem('teacherProfile', JSON.stringify(apiMergedProfile));
+          } catch (apiError) {
+          }
+        }
       } catch (error) {
-        console.error('Failed to load teacher profile:', error);
       } finally {
         setProfileReady(true);
       }
@@ -385,6 +731,16 @@ const TeacherDashboard = () => {
 
     loadTeacherProfile();
   }, [route.params]);
+
+  useEffect(() => {
+    if (route.params?.openProfilePanel) {
+      setShowTeacherDetails(true);
+      navigation.setParams({
+        ...(route.params ?? {}),
+        openProfilePanel: false,
+      });
+    }
+  }, [navigation, route.params]);
 
   useEffect(() => {
     const loadParentProfileCache = async () => {
@@ -397,8 +753,7 @@ const TeacherDashboard = () => {
 
         const cachedParentProfile = JSON.parse(cachedParentProfileRaw);
         setParentProfileCache(cachedParentProfile);
-      } catch (error) {
-        console.error('Failed to load cached parent profile:', error);
+      } catch {
         setParentProfileCache(null);
       }
     };
@@ -411,26 +766,12 @@ const TeacherDashboard = () => {
       try {
         const cachedLogo = await AsyncStorage.getItem('schoolLogo');
         setSchoolLogo(cachedLogo || '');
-      } catch (error) {
-        console.error('Failed to load school logo:', error);
+      } catch {
       }
     };
 
     loadSchoolLogo();
   }, []);
-
-  useEffect(() => {
-    const visibleLabels = dashboardTilesMap[selectedChip]?.map((tile) => tile.label) || [];
-    if (!visibleLabels.includes(selectedModule)) {
-      setSelectedModule(visibleLabels[0] || 'Attendance');
-      currentModuleRef.current = visibleLabels[0] || 'Attendance';
-    }
-    moduleHistoryRef.current = [visibleLabels[0] || 'Attendance'];
-    pendingScrollModuleRef.current = null;
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ y: 0, animated: false });
-    }
-  }, [selectedChip]);
 
   useEffect(() => {
     refreshNextClass();
@@ -442,7 +783,6 @@ const TeacherDashboard = () => {
     }
 
     startPersistentAttendanceTracking().catch((error) => {
-      console.error('Failed to start attendance tracking:', error);
     });
   }, [isScreenFocused]);
 
@@ -456,8 +796,7 @@ const TeacherDashboard = () => {
           importance: AndroidImportance.HIGH,
           vibration: true,
         });
-      } catch (error) {
-        console.error('Failed to create reminder notification channel:', error);
+      } catch {
       }
     };
 
@@ -521,8 +860,7 @@ const TeacherDashboard = () => {
               ? 'Waiting for first check'
               : '--',
         });
-      } catch (error) {
-        console.error('Failed to load attendance snapshot:', error);
+      } catch {
       }
     };
 
@@ -543,8 +881,7 @@ const TeacherDashboard = () => {
         username: teacherProfile.username || route.params?.username || '',
         name: teacherProfile.name || route.params?.name || '',
       });
-    } catch (error) {
-      console.error('Failed to switch to campaigning dashboard:', error);
+    } catch {
     }
   };
 
@@ -567,8 +904,7 @@ const TeacherDashboard = () => {
         index: 0,
         routes: [{ name: 'TeacherLogin' }],
       });
-    } catch (error) {
-      console.error('Logout failed:', error);
+    } catch {
       navigation.reset({
         index: 0,
         routes: [{ name: 'TeacherLogin' }],
@@ -576,22 +912,15 @@ const TeacherDashboard = () => {
     }
   };
 
-  const dashboardTiles = dashboardTilesMap[selectedChip] || dashboardTilesMap['Daily Routines'];
-  const selectedChipTiles = dashboardTilesMap[selectedChip] || [];
-  const dashboardTileColumns = dashboardTiles.reduce<DashboardTile[][]>((columns, tile, index) => {
-    if (index % 2 === 0) {
-      columns.push([tile]);
-    } else {
-      columns[columns.length - 1].push(tile);
-    }
-
-    return columns;
-  }, []);
+  const dashboardTiles = dashboardTilesMap['Daily Routines'];
+  const nextClassTitle = nextClass?.class_id || '--';
+  const nextClassSubtitle = nextClass?.subject || 'No Class';
+  const nextClassFooter = nextClass ? `${nextClass.fromTime} - ${nextClass.toTime}` : 'No timetable available';
   const statusCards: StatCard[] = [
     {
-      title: nextClass?.class_id || '--',
-      subtitle: nextClass?.subject || 'No Class',
-      footer: nextClass ? `${nextClass.fromTime} - ${nextClass.toTime}` : 'No timetable available',
+      title: nextClassTitle,
+      subtitle: nextClassSubtitle,
+      footer: nextClassFooter,
       icon: 'schedule',
       kind: 'material',
       background: '#D7E7CD',
@@ -606,113 +935,92 @@ const TeacherDashboard = () => {
     },
   ];
   const nextClassReport = buildTeacherDayPeriods(fullTimetable);
-
-  useEffect(() => {
-    currentModuleRef.current = selectedModule;
-  }, [selectedModule]);
-
-  const recomputeSnapOffsets = () => {
-    const nextSnapOffsets = [
-      0,
-      ...dashboardTilesMap[selectedChip]
-        .map((tile) => moduleOffsetsRef.current[tile.label])
-        .filter((value): value is number => typeof value === 'number')
-        .map((value) => Math.max(0, Math.round(value))),
-    ]
-      .filter((value, index, array) => array.indexOf(value) === index)
-      .sort((a, b) => a - b);
-
-    setSnapOffsets(nextSnapOffsets);
+  const sharedParams = {
+    username: teacherProfile.username || route.params?.username || '',
+    name: teacherProfile.name || route.params?.name || '',
+    schoolCode: teacherProfile.schoolCode || '',
   };
-
-  const getModuleForScrollOffset = (scrollY: number) => {
-    const visibleLabels = dashboardTilesMap[selectedChip]?.map((tile) => tile.label) || [];
-    if (visibleLabels.length === 0) return selectedModule;
-
-    let activeModule = visibleLabels[0];
-    for (const label of visibleLabels) {
-      const offset = moduleOffsetsRef.current[label];
-      if (typeof offset !== 'number') continue;
-      if (scrollY + 24 >= offset) {
-        activeModule = label;
-      } else {
-        break;
-      }
-    }
-
-    return activeModule;
-  };
-
-  const activateModule = (label: string, pushHistory = true) => {
-    currentModuleRef.current = label;
-    setSelectedModule(label);
-    pendingScrollModuleRef.current = label;
-
-    if (pushHistory) {
-      const history = moduleHistoryRef.current;
-      if (history[history.length - 1] !== label) {
-        history.push(label);
-      }
+  const teacherPhotoUri = resolveTeacherPhotoUri(teacherProfile.photoUrl || teacherProfile.photo);
+  const teacherClassesLabel = teacherProfile.teachesToClasses.length
+    ? `Teaches ${teacherProfile.teachesToClasses.length} class${teacherProfile.teachesToClasses.length > 1 ? 'es' : ''}`
+    : 'No classes assigned';
+  const teacherClassChips = teacherProfile.teachesToClasses;
+  const teacherClassRows = Math.max(1, Math.ceil(Math.max(teacherClassChips.length, 1) / 3));
+  const heroCardHeight = Math.max(190, 150 + (teacherClassRows - 1) * 28);
+  const dashboardGridStyle = [
+    styles.dashboardGridWrap,
+    {
+      paddingHorizontal: 6,
+      marginBottom: 10,
+      justifyContent: 'flex-start' as const,
+      alignItems: 'flex-start' as const,
+    },
+  ];
+  const teacherInitial =
+    (teacherProfile.name || teacherProfile.username || 'T').trim().charAt(0).toUpperCase() || 'T';
+  const navigateToModule = (label: string) => {
+    switch (label) {
+      case 'Attendance':
+        navigation.navigate('TeacherAttendance', sharedParams);
+        return;
+      case 'Homework':
+        navigation.navigate('TeacherHomework', sharedParams);
+        return;
+      case 'Time table':
+        navigation.navigate('TeacherTimetable', sharedParams);
+        return;
+      case 'Topic of day':
+        navigation.navigate('TopicOfDay', sharedParams);
+        return;
+      case 'Behaviour':
+        navigation.navigate('TeacherBehaviour', sharedParams);
+        return;
+      case 'Photo':
+        navigation.navigate('TeacherEventMediaUpload', sharedParams);
+        return;
+      case 'Calendar':
+        navigation.navigate('TeacherCalender', sharedParams);
+        return;
+      case 'Scan':
+        navigation.navigate('ScanPull');
+        return;
+      case 'Salary':
+        navigation.navigate('TeacherSalary', sharedParams);
+        return;
+      case 'Leave':
+        navigation.navigate('TeacherLeaveRequest', sharedParams);
+        return;
+      case 'Chat':
+        navigation.navigate('TeacherChatAndEvents', sharedParams);
+        return;
+      case 'Announcements':
+        navigation.navigate('TeacherAnnouncements', sharedParams);
+        return;
+      default:
+        Alert.alert('Unavailable', `No page is wired for "${label}" yet.`);
     }
   };
 
   const handleTilePress = (tile: DashboardTile) => {
-    activateModule(tile.label, true);
-
-    requestAnimationFrame(() => {
-      const offset = moduleOffsetsRef.current[tile.label];
-      if (typeof offset === 'number' && scrollRef.current) {
-        scrollRef.current.scrollTo({ y: Math.max(0, offset - 12), animated: true });
-      }
-    });
-  };
-
-  const openChip = (chip: string, moduleLabel?: string) => {
-    setSelectedChip(chip);
-    if (moduleLabel) {
-      moduleHistoryRef.current = [moduleLabel];
-      currentModuleRef.current = moduleLabel;
-      setSelectedModule(moduleLabel);
-      pendingScrollModuleRef.current = moduleLabel;
-    }
-  };
-
-  const handleGoBack = () => {
-    const history = moduleHistoryRef.current;
-    if (history.length <= 1) {
-      return;
-    }
-
-    history.pop();
-    const previousModule = history[history.length - 1] || 'Attendance';
-    currentModuleRef.current = previousModule;
-    setSelectedModule(previousModule);
-    pendingScrollModuleRef.current = previousModule;
-
-    requestAnimationFrame(() => {
-      const offset = moduleOffsetsRef.current[previousModule];
-      if (typeof offset === 'number' && scrollRef.current) {
-        scrollRef.current.scrollTo({ y: Math.max(0, offset - 12), animated: true });
-      }
-    });
+    setSelectedModule(tile.label);
+    navigateToModule(tile.label);
   };
 
   const handleOpenHomePanel = () => {
-    const homeworkTile = dashboardTiles.find((tile) => tile.label === 'Homework');
-    if (homeworkTile) {
-      handleTilePress(homeworkTile);
-    } else {
-      openChip('Daily Routines', 'Homework');
-    }
-    setShowFooterNav(false);
+    setSelectedModule('TeacherDashboard');
+  };
+
+  const handleGoBack = () => {
+    navigation.goBack();
   };
 
   const handleAddPress = () => {
-    openChip('Daily Routines', 'Attendance');
+    setSelectedModule('TeacherDashboard');
   };
 
   const handleOpenChat = () => {
-    openChip('Requests', 'Chat');
+    setSelectedModule('Chat');
+    navigateToModule('Chat');
   };
 
   const handleOpenProfilePanel = () => {
@@ -762,96 +1070,83 @@ const TeacherDashboard = () => {
         index: 0,
         routes: [
           {
-            name: 'ParentDashboard' as never,
+            name: 'ParentDashboard',
             params: { username, name },
           },
         ],
       });
-    } catch (error) {
-      console.error('Failed to switch to parent account:', error);
+    } catch {
       Alert.alert('Error', 'Failed to switch to parent account.');
     }
   };
 
+  useEffect(() => {
+    const createImageLoop = (animValue: Animated.Value, delay: number) => {
+      animValue.setValue(0);
+
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(animValue, {
+            toValue: 1,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(animValue, {
+            toValue: 0,
+            duration: 1800,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+
+      loop.start();
+      return loop;
+    };
+
+    const loops = [
+      createImageLoop(summaryImageAnimValues.current[0], 0),
+      createImageLoop(summaryImageAnimValues.current[1], 140),
+    ];
+
+    return () => {
+      loops.forEach((loop) => loop.stop());
+    };
+  }, []);
+
+  const nextClassImageTranslateY = summaryImageAnimValues.current[0].interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -10],
+  });
+  const nextClassImageScale = summaryImageAnimValues.current[0].interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
+  const nextClassImageRotate = summaryImageAnimValues.current[0].interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-5deg'],
+  });
+  const attendanceImageTranslateY = summaryImageAnimValues.current[1].interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -8],
+  });
+  const attendanceImageScale = summaryImageAnimValues.current[1].interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.06],
+  });
+  const attendanceImageRotate = summaryImageAnimValues.current[1].interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-4deg'],
+  });
+
   if (!profileReady) {
     return (
       <View style={styles.screen}>
-        <StatusBar barStyle="light-content" backgroundColor="#0E0E0F" />
+        <StatusBar barStyle="light-content" backgroundColor="#fff" />
        
       </View>
     );
   }
-
-  const inlineParams = {
-    username: teacherProfile.username || route.params?.username || '',
-    name: teacherProfile.name || route.params?.name || '',
-    schoolCode: teacherProfile.schoolCode || '',
-  };
-
-  const renderModuleUi = (label: string) => {
-    switch (label) {
-      case 'Attendance':
-        return React.createElement(TeacherAttendance as any, { route: { params: inlineParams } });
-      case 'Behaviour':
-        return React.createElement(TeacherBehaviour as any, { route: { params: inlineParams } });
-      case 'Time table':
-        return React.createElement(TeacherTimetable as any, { inlineParams });
-      case 'Photo':
-        return React.createElement(TeacherEventMediaUpload as any, { route: { params: inlineParams } });
-      // case 'Tickets':
-      //   return React.createElement(TeacherTickets as any, { route: { params: inlineParams } });
-      case 'Salary':
-        return React.createElement(TeacherSalary as any, { route: { params: inlineParams } });
-      case 'Calendar':
-        return React.createElement(TeacherCalender as any, { inlineParams });
-      // case 'Student Report':
-      //   return React.createElement(TeacherDetails as any, { route: { params: inlineParams } });
-      case 'Topic of day':
-        return React.createElement(TopicOfDay as any, { route: { params: inlineParams } });
-      case 'Homework':
-        return React.createElement(TeacherHomework as any, {
-          route: { params: inlineParams },
-        });
-      // case 'Question Paper':
-      //   return React.createElement(TeacherQuestionPaperGeneration as any, {
-      //     route: { params: inlineParams },
-      //   });
-      case 'Scan':
-        return React.createElement(HandwritingScanPull as any, {});
-      case 'Leave':
-        return React.createElement(TeacherLeaveRequest as any, { route: { params: inlineParams } });
-      case 'Chat':
-        return React.createElement(TeacherChatAndEvents as any, { route: { params: inlineParams } });
-      // case 'Test':
-      //   return React.createElement(TeacherCounselling as any, { route: { params: inlineParams } });
-      default:
-        return null;
-    }
-  };
-
-  const renderModuleSection = (label: string) => (
-    <View
-      key={label}
-      onLayout={(event) => {
-        moduleOffsetsRef.current[label] = event.nativeEvent.layout.y;
-        recomputeSnapOffsets();
-        if (pendingScrollModuleRef.current === label) {
-          requestAnimationFrame(() => {
-            const offset = moduleOffsetsRef.current[label];
-            if (typeof offset === 'number' && scrollRef.current) {
-              scrollRef.current.scrollTo({ y: Math.max(0, offset - 12), animated: true });
-            }
-          });
-        }
-      }}
-      style={styles.modulePanel}
-    >
-      <View style={styles.moduleHeaderRow}>
-        <Text style={styles.moduleTitle}>{label}</Text>
-      </View>
-      {renderModuleUi(label)}
-    </View>
-  );
 
   return (
     <View style={styles.screen}>
@@ -860,191 +1155,231 @@ const TeacherDashboard = () => {
       <View style={styles.background}>
         <View style={styles.phoneShell}>
           <View style={styles.phoneFrame}>
+            <LinearGradient
+              pointerEvents="none"
+                colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+              start={{ x: 0.05, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.dashboardTopGradient}
+            />
             <View style={styles.toolbar}>
-              <View style={styles.toolbarBrand}>
+              <View style={styles.toolbarBrandCentered}>
                 <Image
                   source={schoolLogo ? { uri: schoolLogo } : logoImage}
                   style={styles.toolbarBrandLogo}
                   resizeMode="contain"
                 />
-              </View>
-              <View style={styles.toolbarCenterAbsolute}>
-                <Text style={styles.toolbarBrandName} numberOfLines={1}>
-                  Welcome {teacherProfile.name || teacherProfile.username || 'Teacher'}
+                <Text style={styles.toolbarBrandName1} numberOfLines={1}>
+                  {teacherProfile.schoolCode || '--'}
                 </Text>
               </View>
-              <View style={styles.toolbarSpacer} />
-             
             </View>
 
-            <View style={styles.chipRowSection}>
-              <ScrollView
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.selectedChipMapRow}
+            <View
+              style={[
+                styles.dashboardHeroCard,
+                {
+                  height: heroCardHeight,
+                  marginBottom: 10,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={['#6826df', '#a174eb', '#1A2D4A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.dashboardHeroGradientCard}
               >
-                {selectedChipTiles.map((tile, index) => {
-                  const active = selectedModule === tile.label;
-
-                  return (
-                    <Pressable
-                      key={tile.label}
-                      onPress={() => handleTilePress(tile)}
-                      style={[
-                        styles.selectedChipMapItem,
-                        index !== selectedChipTiles.length - 1 && styles.selectedChipMapItemSpacing,
-                        active ? styles.selectedChipMapItemActive : styles.selectedChipMapItemInactive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.selectedChipMapText,
-                          active
-                            ? styles.selectedChipMapTextActive
-                            : styles.selectedChipMapTextInactive,
-                        ]}
-                      >
-                        {tile.label}
+                <View style={styles.dashboardHeroExpandedLayout}>
+                  <View style={styles.dashboardHeroExpandedLeft}>
+                    <Text style={styles.dashboardHeroName} numberOfLines={2}>
+                      {teacherProfile.name || teacherProfile.username || 'Teacher'}
+                    </Text>
+                    <Text style={styles.dashboardHeroClass} numberOfLines={1}>
+                      {teacherProfile.designation || 'Teacher Dashboard'}
+                    </Text>
+                    <Text style={styles.dashboardHeroTeachingLine} numberOfLines={1}>
+                      {teacherClassesLabel}
+                    </Text>
+                    {teacherClassChips.length > 0 ? (
+                      <View style={styles.dashboardHeroClassChips}>
+                        {teacherClassChips.map((className) => (
+                          <View key={String(className)} style={styles.dashboardHeroClassChip}>
+                            <Text style={styles.dashboardHeroClassChipText}>Class {className}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.dashboardHeroTeachingLine} numberOfLines={1}>
+                        No classes assigned
                       </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                    )}
+
+                    <View style={styles.dashboardHeroStatsRow}>
+                      <View style={styles.dashboardHeroStatItem}>
+                        <Text style={styles.dashboardHeroStatLabel}>Next Class</Text>
+                        <Text style={styles.dashboardHeroStatValue}>
+                          {statusCards[0].title} {statusCards[0].subtitle}
+                        </Text>
+                      </View>
+                      <View style={styles.dashboardHeroStatItem}>
+                        <Text style={styles.dashboardHeroStatLabel}>Attendance</Text>
+                        <Text style={styles.dashboardHeroStatValue}>
+                          {attendanceSnapshot.status}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.dashboardHeroActiveProfileFloat} pointerEvents="none">
+                  <View style={styles.dashboardHeroPrimaryProfile}>
+                    {teacherPhotoUri ? (
+                      <Image
+                        source={{ uri: teacherPhotoUri }}
+                        style={styles.dashboardHeroPrimaryAvatar}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <Text style={styles.dashboardHeroPrimaryAvatarText}>{teacherInitial}</Text>
+                    )}
+                  </View>
+                </View>
+              </LinearGradient>
             </View>
 
             <ScrollView
-              ref={scrollRef}
               style={styles.scrollArea}
               contentContainerStyle={styles.scrollContent}
-              nestedScrollEnabled
               showsVerticalScrollIndicator={false}
-              snapToOffsets={snapOffsets}
-              snapToAlignment="start"
-              decelerationRate="fast"
-              disableIntervalMomentum
-              onScroll={(event) => {
-                if (event.nativeEvent.contentOffset.y > 8) {
-                  setShowFooterNav(true);
-                }
-
-                if (!pendingScrollModuleRef.current) {
-                  const nextModule = getModuleForScrollOffset(event.nativeEvent.contentOffset.y);
-                  if (nextModule && nextModule !== currentModuleRef.current) {
-                    currentModuleRef.current = nextModule;
-                    setSelectedModule(nextModule);
-
-                    const history = moduleHistoryRef.current;
-                    if (history[history.length - 1] !== nextModule) {
-                      history.push(nextModule);
-                    }
-                  }
-                }
-              }}
-              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.heroCard}>
-                <View style={styles.heroGlow} />
-                <Image source={heroImage} style={styles.heroImage} resizeMode="contain" />
-              </View>
-
-              <View style={styles.dashboardStickyHeader}>
-                <Text style={styles.sectionTitle}>Teacher Dashboard</Text>
+              <View style={styles.parentActionSection}>
                 <ScrollView
                   horizontal
                   nestedScrollEnabled
                   directionalLockEnabled
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.dashboardGridScroller}
+                  decelerationRate="fast"
+                  snapToAlignment="start"
+                  snapToInterval={phoneWidth - 14}
+                  contentContainerStyle={styles.parentActionScroll}
                 >
-                  {dashboardTileColumns.map((column, columnIndex) => (
-                    <View
-                      key={`dashboard-column-${columnIndex}`}
-                      style={[
-                        styles.dashboardGridColumn,
-                        columnIndex !== dashboardTileColumns.length - 1 &&
-                          styles.dashboardGridColumnSpacing,
-                      ]}
-                    >
-                      {column.map((tile) => (
-                        <Pressable
-                          key={tile.label}
-                          style={[
-                            styles.dashboardGridCardThree,
-                            selectedModule === tile.label && styles.dashboardGridCardActive,
-                          ]}
-                          onPress={() => handleTilePress(tile)}
-                        >
-                          <View style={styles.dashboardTileIconWrap}>
-                            {renderIcon(tile.kind, tile.icon, '#7F7F84', 26)}
-                          </View>
-                          <Text style={styles.dashboardTileLabel}>{tile.label}</Text>
-                        </Pressable>
-                      ))}
+                <Pressable
+                  style={[
+                    styles.parentActionCard,
+                    teacherDashboardCardStyles.summaryActionCard,
+                    styles.parentActionCardSpacing,
+                  ]}
+                  onPress={() => setShowNextClassReport(true)}
+                >
+                  <View style={styles.parentActionCardBody}>
+                    <View style={styles.parentActionCardTextBlock}>
+                      <Text style={styles.parentActionCardLabel}>Next Class</Text>
+                      <Text style={styles.parentActionCardValue} numberOfLines={1}>
+                        {statusCards[0].subtitle}
+                      </Text>
+                      <Text style={styles.parentActionCardSubtitle} numberOfLines={2}>
+                        {statusCards[0].footer}
+                      </Text>
+                      <View style={styles.parentActionCta}>
+                        <Text style={styles.parentActionCtaText}>View Report</Text>
+                      </View>
                     </View>
-                  ))}
+                    <Animated.Image
+                      source={require('../assets/leaves.png')}
+                      style={[
+                        styles.parentActionImage,
+                        {
+                          transform: [
+                            { translateY: nextClassImageTranslateY },
+                            { scale: nextClassImageScale },
+                            { rotate: nextClassImageRotate },
+                          ],
+                        },
+                      ]}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.parentActionCard,
+                    teacherDashboardCardStyles.summaryActionCard,
+                  ]}
+                  onPress={() => handleTilePress(dashboardTiles.find((tile) => tile.label === 'Attendance') || dashboardTiles[0])}
+                >
+                  <View style={styles.parentActionCardBody}>
+                    <View style={styles.parentActionCardTextBlock}>
+                      <Text style={styles.parentActionCardLabel}>Attendance</Text>
+                      <Text style={styles.parentActionCardValue} numberOfLines={1}>
+                        {statusCards[1].title}
+                      </Text>
+                      <Text style={styles.parentActionCardSubtitle} numberOfLines={2}>
+                        {statusCards[1].footer}
+                      </Text>
+                      <View style={styles.parentActionCta}>
+                        <Text style={styles.parentActionCtaText}>Open Attendance</Text>
+                      </View>
+                    </View>
+                    <Animated.Image
+                      source={require('../assets/leaves.png')}
+                      style={[
+                        styles.parentActionImage,
+                        {
+                          transform: [
+                            { translateY: attendanceImageTranslateY },
+                            { scale: attendanceImageScale },
+                            { rotate: attendanceImageRotate },
+                          ],
+                        },
+                      ]}
+                      resizeMode="contain"
+                    />
+                  </View>
+                </Pressable>
                 </ScrollView>
               </View>
 
-
-              <View style={styles.statusCardsRow}>
-                <View
-                  style={[
-                    styles.statusCard,
-                    styles.statusCardLeft,
-                    { backgroundColor: statusCards[0].background },
-                  ]}
-                >
-                  <View style={styles.statusCardText}>
-                    <View style={styles.statusTitleRow}>
-                      <Text style={styles.statusNumber} numberOfLines={1} ellipsizeMode="tail">
-                        {statusCards[0].title}
-                      </Text>
-                      <Text style={styles.statusSubtitle} numberOfLines={1} ellipsizeMode="tail">
-                        {statusCards[0].subtitle}
-                      </Text>
-                    </View>
-                    <Text style={styles.statusFooter} numberOfLines={2} ellipsizeMode="tail">
-                      {statusCards[0].footer}
-                    </Text>
+              <View style={styles.dashboardStickyHeader}>
+                <Text style={styles.sectionTitle}>Teacher Dashboard</Text>
+                
+                <View style={dashboardGridStyle}>
+                  {dashboardTiles.map((tile, index) => (
                     <Pressable
-                      onPress={() => setShowNextClassReport(true)}
-                      style={styles.statusActionButton}
+                      key={tile.label}
+                      style={[
+                        teacherDashboardCardStyles.cardWrapper,
+                        index % 2 === 0 && { marginRight: 10 },
+                        selectedModule === tile.label && teacherDashboardCardStyles.cardActive,
+                      ]}
+                      onPress={() => handleTilePress(tile)}
                     >
-                      <Text style={styles.statusActionLink}>View Report</Text>
+                      <View style={teacherDashboardCardStyles.card}>
+                      <View style={styles.dashboardGridCornerAccent1}>
+                                           <LinearGradient
+                                             colors={['#d2c2eeff', '#a174eb', '#6826df']}
+                                             start={{ x: 0, y: 0 }}
+                                             end={{ x: 1, y: 1 }}
+                                             style={styles.dashboardGridCornerAccentFill}
+                                           />
+                                         </View>
+                        <View style={teacherDashboardCardStyles.iconWrap}>
+                          {renderIcon(tile.kind, tile.icon, '#000000', 30)}
+                        </View>
+                        <View style={teacherDashboardCardStyles.cardContent}>
+                          <View style={teacherDashboardCardStyles.textBlock}>
+                            <Text style={teacherDashboardCardStyles.label} numberOfLines={2}>
+                              {tile.label}
+                            </Text>
+                            <Text style={teacherDashboardCardStyles.subtitle} numberOfLines={1}>
+                              {tile.subtitle}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
                     </Pressable>
-                  </View>
-
-                  <View style={styles.statusIconWrap}>
-                    {renderIcon(statusCards[0].kind, statusCards[0].icon, '#4C4C4C', 30)}
-                  </View>
-                </View>
-
-                <View
-                  style={[
-                    styles.statusCard,
-                    styles.statusCardRight,
-                    { backgroundColor: statusCards[1].background },
-                  ]}
-                >
-                  <View style={styles.statusCardText}>
-                    <View style={styles.statusTitleRow}>
-                      <Text style={styles.statusNumber} numberOfLines={1} ellipsizeMode="tail">
-                        {statusCards[1].title}
-                      </Text>
-                      <Text style={styles.statusSubtitle} numberOfLines={1} ellipsizeMode="tail">
-                        {statusCards[1].subtitle}
-                      </Text>
-                    </View>
-                    <Text style={styles.statusFooter} numberOfLines={2} ellipsizeMode="tail">
-                      {statusCards[1].footer}
-                    </Text>
-                  </View>
-
-                  <View style={styles.statusIconWrap}>
-                    {renderIcon(statusCards[1].kind, statusCards[1].icon, '#4C4C4C', 30)}
-                  </View>
+                  ))}
                 </View>
               </View>
 
@@ -1092,25 +1427,27 @@ const TeacherDashboard = () => {
                   </View>
                 </View>
               </Modal>
-
-              <Text style={styles.sectionTitle}>
-                {selectedChip} Content
-              </Text>
-
-              {dashboardTiles.map((tile) => renderModuleSection(tile.label))}
             </ScrollView>
 
             {showTeacherDetails && (
               <View style={styles.overlay}>
                 <View style={styles.teacherPopupCard}>
                   <View style={styles.teacherHeaderRow}>
-                    <View style={styles.teacherAvatar}>
-                      <Text style={styles.teacherAvatarText}>
-                        {(teacherProfile.name || teacherProfile.username || 'T')
-                          .trim()
-                          .charAt(0)
-                          .toUpperCase()}
-                      </Text>
+                  <View style={styles.teacherAvatar}>
+                      {teacherPhotoUri ? (
+                        <Image
+                          source={{ uri: teacherPhotoUri }}
+                          style={styles.teacherAvatarImage}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Text style={styles.teacherAvatarText}>
+                          {(teacherProfile.name || teacherProfile.username || 'T')
+                            .trim()
+                            .charAt(0)
+                            .toUpperCase()}
+                        </Text>
+                      )}
                     </View>
                     <View style={styles.teacherHeaderText}>
                       <Text style={styles.teacherTitle}>Teacher Details</Text>
@@ -1249,29 +1586,31 @@ const TeacherDashboard = () => {
             )}   
 
             <View style={styles.footer}>
-              {showFooterNav && (
-                <View style={styles.footerNav}>
-                  <Pressable style={styles.footerNavItem} onPress={handleGoBack}>
-                    <Image source={require('../assets/Arrow.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
-                    <Text style={styles.footerNavLabel}>Back</Text>
-                  </Pressable>
-                  <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
-                    <MaterialIcons name="home" size={22} color="#1F1F22" />
-                    <Text style={styles.footerNavLabel}>Home</Text>
-                  </Pressable>
-                  <Pressable style={styles.footerAddButton} onPress={handleAddPress}>
-                    <MaterialIcons name="add" size={26} color="#FFFFFF" />
-                  </Pressable>
-                  <Pressable style={styles.footerNavItem} onPress={handleOpenChat}>
-                    <MaterialIcons name="chat-bubble-outline" size={22} color="#C2C2C7" />
-                    <Text style={styles.footerNavLabelMuted}>Chat</Text>
-                  </Pressable>
-                  <Pressable style={styles.footerNavItem} onPress={handleOpenProfilePanel}>
-                    <MaterialIcons name="person-outline" size={22} color="#C2C2C7" />
-                    <Text style={styles.footerNavLabelMuted}>Profile</Text>
-                  </Pressable>
-                </View>
-              )}
+              <View style={styles.footerNav}>
+                <Pressable style={styles.footerNavItem} onPress={handleGoBack}>
+                  <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
+                  <Text style={styles.footerNavLabel}>Back</Text>
+                </Pressable>
+                <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
+                  <MaterialIcons name="home" size={22} color="#1F1F22" />
+                  <Text style={styles.footerNavLabel}>Home</Text>
+                </Pressable>
+                <Pressable style={styles.footerAddButton} onPress={handleAddPress}>
+                  <MaterialIcons name="add" size={26} color="#FFFFFF" />
+                </Pressable>
+                <Pressable style={styles.footerNavItem} onPress={handleOpenChat}>
+                  <MaterialIcons name="chat-bubble-outline" size={22} color="#1F1F22" />
+                  <Text style={styles.footerNavLabelMuted}>Chat</Text>
+                </Pressable>
+                <Pressable style={styles.footerNavItem} onPress={handleOpenProfilePanel}>
+                  {teacherPhotoUri ? (
+                    <Image source={{ uri: teacherPhotoUri }} style={styles.footerProfilePhoto} resizeMode="cover" />
+                  ) : (
+                    <MaterialIcons name="person-outline" size={22} color="#1F1F22" />
+                  )}
+                  <Text style={styles.footerNavLabelMuted}>Profile</Text>
+                </Pressable>
+              </View>
               <View style={styles.footerBrandRow}>
                 <Text style={styles.poweredBy}>Powered By</Text>
                 <Image source={logoImage} style={styles.logo} resizeMode="contain" />

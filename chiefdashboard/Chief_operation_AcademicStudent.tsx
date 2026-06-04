@@ -21,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-chart-kit';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import ChiefFooterProfile from './ChiefFooterProfile';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { globalStyles as styles } from '../styles';
@@ -647,7 +648,7 @@ const AcademicStudent: React.FC = () => {
   const chartPoints = activeTrend.validPoints;
   const chartLabels = chartPoints.map(point => point.label);
   const chartData = chartPoints.map(point => point.value ?? 0);
-  const chartWidth = Math.max(width - 48, chartPoints.length * 72);
+  const chartWidth = Math.max(width - 56, 240);
   const activeTrendTitle = selectedSubjectRow
     ? selectedSubjectRow.subject || 'Selected Subject'
     : 'All Subjects';
@@ -1021,51 +1022,46 @@ const AcademicStudent: React.FC = () => {
                   ) : (
                     <>
                       <View style={chartStyles.chartWrap}>
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                        >
-                          <LineChart
-                            data={{
-                              labels: chartLabels,
-                              datasets: [
-                                {
-                                  data: chartData,
-                                  color: opacity =>
-                                    `rgba(124, 58, 237, ${opacity})`,
-                                  strokeWidth: 3,
-                                },
-                              ],
-                            }}
-                            width={chartWidth}
-                            height={240}
-                            yAxisSuffix="%"
-                            fromZero
-                            withDots
-                            withInnerLines={false}
-                            withOuterLines
-                            segments={4}
-                            bezier
-                            chartConfig={{
-                              backgroundColor: '#F6F3FF',
-                              backgroundGradientFrom: '#F6F3FF',
-                              backgroundGradientTo: '#F6F3FF',
-                              decimalPlaces: 1,
-                              color: opacity => `rgba(124, 58, 237, ${opacity})`,
-                              labelColor: () => '#667085',
-                              propsForDots: {
-                                r: '4',
-                                strokeWidth: '2',
-                                stroke: '#7C3AED',
+                        <LineChart
+                          data={{
+                            labels: chartLabels,
+                            datasets: [
+                              {
+                                data: chartData,
+                                color: opacity =>
+                                  `rgba(124, 58, 237, ${opacity})`,
+                                strokeWidth: 3,
                               },
-                              propsForBackgroundLines: {
-                                stroke: '#e5e7eb',
-                                strokeDasharray: '',
-                              },
-                            }}
-                            style={chartStyles.trendChart}
-                          />
-                        </ScrollView>
+                            ],
+                          }}
+                          width={chartWidth}
+                          height={240}
+                          yAxisSuffix="%"
+                          fromZero
+                          withDots
+                          withInnerLines={false}
+                          withOuterLines
+                          segments={4}
+                          bezier
+                          chartConfig={{
+                            backgroundColor: '#F6F3FF',
+                            backgroundGradientFrom: '#F6F3FF',
+                            backgroundGradientTo: '#F6F3FF',
+                            decimalPlaces: 1,
+                            color: opacity => `rgba(124, 58, 237, ${opacity})`,
+                            labelColor: () => '#667085',
+                            propsForDots: {
+                              r: '4',
+                              strokeWidth: '2',
+                              stroke: '#7C3AED',
+                            },
+                            propsForBackgroundLines: {
+                              stroke: '#e5e7eb',
+                              strokeDasharray: '',
+                            },
+                          }}
+                          style={chartStyles.trendChart}
+                        />
                       </View>
 
                       <View style={chartStyles.transitionList}>
@@ -1211,48 +1207,46 @@ const AcademicStudent: React.FC = () => {
                   </View>
 
                   <View style={chartStyles.chartWrap}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                      <LineChart
-                        data={{
-                          labels: chartLabels,
-                          datasets: [
-                            {
-                              data: chartData,
-                              color: opacity =>
-                                `rgba(124, 58, 237, ${opacity})`,
-                              strokeWidth: 3,
-                            },
-                          ],
-                        }}
-                        width={chartWidth}
-                        height={240}
-                        yAxisSuffix="%"
-                        fromZero
-                        withDots
-                        withInnerLines={false}
-                        withOuterLines
-                        segments={4}
-                        bezier
-                        chartConfig={{
-                          backgroundColor: '#F6F3FF',
-                          backgroundGradientFrom: '#F6F3FF',
-                          backgroundGradientTo: '#F6F3FF',
-                          decimalPlaces: 1,
-                          color: opacity => `rgba(124, 58, 237, ${opacity})`,
-                          labelColor: () => '#667085',
-                          propsForDots: {
-                            r: '4',
-                            strokeWidth: '2',
-                            stroke: '#7C3AED',
+                    <LineChart
+                      data={{
+                        labels: chartLabels,
+                        datasets: [
+                          {
+                            data: chartData,
+                            color: opacity =>
+                              `rgba(124, 58, 237, ${opacity})`,
+                            strokeWidth: 3,
                           },
-                          propsForBackgroundLines: {
-                            stroke: '#e5e7eb',
-                            strokeDasharray: '',
-                          },
-                        }}
-                        style={chartStyles.trendChart}
-                      />
-                    </ScrollView>
+                        ],
+                      }}
+                      width={chartWidth}
+                      height={240}
+                      yAxisSuffix="%"
+                      fromZero
+                      withDots
+                      withInnerLines={false}
+                      withOuterLines
+                      segments={4}
+                      bezier
+                      chartConfig={{
+                        backgroundColor: '#F6F3FF',
+                        backgroundGradientFrom: '#F6F3FF',
+                        backgroundGradientTo: '#F6F3FF',
+                        decimalPlaces: 1,
+                        color: opacity => `rgba(124, 58, 237, ${opacity})`,
+                        labelColor: () => '#667085',
+                        propsForDots: {
+                          r: '4',
+                          strokeWidth: '2',
+                          stroke: '#7C3AED',
+                        },
+                        propsForBackgroundLines: {
+                          stroke: '#e5e7eb',
+                          strokeDasharray: '',
+                        },
+                      }}
+                      style={chartStyles.trendChart}
+                    />
                   </View>
 
                   <View style={chartStyles.transitionList}>
@@ -1320,11 +1314,11 @@ const AcademicStudent: React.FC = () => {
               <Ionicons name="chatbubble-outline" size={18} color="#B0B0B5" />
               <Text style={footerStyles.footerLabelMuted}>Chat</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={footerStyles.footerItem}
-              onPress={() => navigation.navigate('ChiefDashboard' as never)}
-            >
-              <Ionicons name="person-outline" size={18} color="#B0B0B5" />
+              <TouchableOpacity
+                style={footerStyles.footerItem}
+                onPress={() => navigation.navigate('ChiefDashboard' as never)}
+              >
+              <ChiefFooterProfile />
               <Text style={footerStyles.footerLabelMuted}>Profile</Text>
             </TouchableOpacity>
           </View>
@@ -1580,6 +1574,7 @@ const chartStyles = StyleSheet.create({
     backgroundColor: '#F6F3FF',
     overflow: 'visible',
     marginBottom: 14,
+    paddingLeft: 0,
     paddingBottom: 8,
   },
   inlineGraphCard: {
@@ -1590,6 +1585,7 @@ const chartStyles = StyleSheet.create({
   },
   trendChart: {
     borderRadius: 20,
+    marginLeft: -10,
   },
   transitionList: {
     gap: 8,

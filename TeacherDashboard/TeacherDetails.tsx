@@ -9,7 +9,7 @@ import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-nat
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Footer from '../Footer';
+import TeacherFooter from './TeacherFooter';
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
@@ -68,10 +68,9 @@ useEffect(() => {
   const loadSchoolCode = async () => {
     try {
       const storedSchoolCode = await AsyncStorage.getItem('schoolCode');
-      console.log('🏫 Stored School Code:', storedSchoolCode);
       setSchoolCode(storedSchoolCode);
-    } catch (err) {
-      console.error('❌ Failed to load schoolCode:', err);
+    } catch {
+      // Ignore storage read failures here and let the profile load handle it.
     }
   };
 
@@ -92,8 +91,6 @@ const fetchTeacherChildren = async (
   schoolCode: string
 ): Promise<Child[]> => {
   try {
-    console.log('🔍 Fetching students for phone:', teacherPhone, 'School:', schoolCode);
-    
     const response = await axios.get(
       'http://162.215.210.38:3010/api/find-children-by-credentials', 
       {
@@ -101,8 +98,6 @@ const fetchTeacherChildren = async (
         timeout: 10000
       }
     );
-
-    console.log('📦 Children API Response:', response.data);
 
     // ✅ Use response.data.students instead of response.data.children
     if (response.data.success && response.data.students) {
@@ -121,8 +116,7 @@ const fetchTeacherChildren = async (
         user_type: 'student'
       }
     ];
-  } catch (error) {
-    console.error('❌ Error fetching teacher children:', error);
+  } catch {
     return [
       {
         id: 513,
@@ -147,8 +141,6 @@ const fetchTeacherChildren = async (
         AsyncStorage.getItem('schoolCode')
       ]);
 
-      console.log('🔑 Stored credentials:', { username, schoolCode });
-
       if (!username || !schoolCode) {
         Alert.alert('Session Expired', 'Please login again');
         navigation.navigate('Login');
@@ -159,8 +151,6 @@ const fetchTeacherChildren = async (
         params: { username, schoolCode },
         timeout: 15000
       });
-
-      console.log('👨‍🏫 Teacher profile response:', response.data);
 
       if (response.data.success) {
         const teacher: Teacher = response.data.teacher;
@@ -177,6 +167,7 @@ const fetchTeacherChildren = async (
           teachesToClasses
         };
 
+        await AsyncStorage.setItem('teacherProfile', JSON.stringify(processedTeacherData));
         setTeacherData(processedTeacherData);
 
         const childrenData = await fetchTeacherChildren(
@@ -189,7 +180,6 @@ const fetchTeacherChildren = async (
         Alert.alert('Error', response.data.message || 'Failed to load profile');
       }
     } catch (error: any) {
-      console.error('❌ Fetch error:', error);
       let errorMessage = 'Network error';
       if (error.response) {
         errorMessage = `Server error: ${error.response.status}`;
@@ -225,7 +215,6 @@ const fetchTeacherChildren = async (
 }) }]
       );
     } catch (error) {
-      console.error('❌ Error switching to child account:', error);
       Alert.alert('Error', 'Failed to switch to child account');
     } finally {
       setShowChildrenModal(false);
@@ -398,8 +387,11 @@ const fetchTeacherChildren = async (
 
       </ScrollView>
 
-              <View style={styles.footerWrapper}>
-                         <Footer /></View>    </View></ScrollView></SafeAreaView>
+    </View>
+  </ScrollView>
+
+  <TeacherFooter profileRoute="TeacherDashboard" />
+</SafeAreaView>
   );
 };
 const styles = StyleSheet.create({
