@@ -50,17 +50,7 @@ type StudentItem = {
   section: string | null;
   assignedRouteId: number | null;
   assignedRouteName: string | null;
-  assignedStopId: number | null;
-  assignedStopName: string | null;
   isDisabled?: boolean;
-};
-
-type BusStop = {
-  id: number;
-  routeId: number;
-  stopName: string;
-  stopAddress: string | null;
-  stopOrder: number;
 };
 
 type SectionKey = 'overview' | 'routes' | 'vehicle' | 'driver' | 'startTime' | 'students' | 'expense';
@@ -92,7 +82,6 @@ type RouteMapRoute = {
   routeId: number;
   routeName: string;
   point: RouteMapPoint | null;
-  stops: RouteMapPoint[];
   routeLabel: string;
   accent: string;
 };
@@ -163,21 +152,6 @@ const buildRouteMapHtml = (
         background: #FFFFFF;
         border: 4px solid var(--route-color, #3C7BF4);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
-      }
-      .stop-marker {
-        width: 22px;
-        height: 18px;
-        border-radius: 999px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #FFFFFF;
-        border: 3px solid var(--route-color, #3C7BF4);
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
-        color: #111827;
-        font-size: 16px;
-        font-weight: 800;
-        padding: 0;
       }
       .school-dot {
         width: 18px;
@@ -254,14 +228,16 @@ const buildRouteMapHtml = (
             longitude: baseLng + Math.cos(angle) * radiusStep * (1 + index * 0.2),
           };
           const point = route.point || syntheticPoint;
-          const stops = Array.isArray(route.stops) ? route.stops.filter(Boolean) : [];
           const routeName = route.routeName || ('Route ' + (index + 1));
           const routeMeta = route.routeLabel || 'Route stop';
 
-          const pathPoints = [[school.latitude, school.longitude]]
-            .concat(stops.map(function (stop) { return [stop.latitude, stop.longitude]; }))
-            .concat([[point.latitude, point.longitude]]);
-
+          L.circleMarker([point.latitude, point.longitude], {
+            radius: 14,
+            color: color,
+            weight: 4,
+            fillColor: '#FFFFFF',
+            fillOpacity: 1,
+          }).addTo(map);
           const marker = L.marker([point.latitude, point.longitude], {
             icon: L.divIcon({
               className: '',
@@ -277,26 +253,11 @@ const buildRouteMapHtml = (
               routeMeta +
               '</div>'
           );
-          stops.forEach(function (stop, stopIndex) {
-            const stopMarker = L.marker([stop.latitude, stop.longitude], {
-              icon: L.divIcon({
-                className: '',
-                html: '<div class="stop-marker" style="--route-color:' + color + '">🚏</div>',
-                iconSize: [12, 20],
-                iconAnchor: [16, 15],
-              }),
-            }).addTo(map);
-            stopMarker.bindPopup(
-              '<div class="popup-title">' +
-                (stop.title || ('Stop ' + (stopIndex + 1))) +
-                '</div><div class="popup-subtitle">' +
-                (stop.description || routeName) +
-                '</div>'
-            );
-            bounds.push([stop.latitude, stop.longitude]);
-          });
           L.polyline(
-            pathPoints,
+            [
+              [school.latitude, school.longitude],
+              [point.latitude, point.longitude],
+            ],
             {
               color: '#1C1C1C',
               weight: 12,
@@ -306,7 +267,10 @@ const buildRouteMapHtml = (
             }
           ).addTo(map);
           L.polyline(
-            pathPoints,
+            [
+              [school.latitude, school.longitude],
+              [point.latitude, point.longitude],
+            ],
             {
               color: color,
               weight: 7,
@@ -332,21 +296,6 @@ const buildRouteMapHtml = (
 const API_BASE = 'http://162.215.210.38:3010/api';
 const logoImage = require('../assets/Cleezo.png');
 const DEBUG_BUS_MANAGER = true;
-
-const getApiErrorMessage = (error: any, fallback: string) => {
-  const serverMessage = error?.response?.data?.message;
-  const serverError = error?.response?.data?.error;
-  const status = error?.response?.status;
-  const networkMessage = error?.message;
-
-  return [
-    serverMessage || serverError || fallback,
-    status ? `Status: ${status}` : null,
-    !status && networkMessage ? networkMessage : null,
-  ]
-    .filter(Boolean)
-    .join('\n');
-};
 
 const dashboardCards: DashboardCard[] = [
   {
@@ -458,34 +407,12 @@ const parentDashboardCardStyles = StyleSheet.create({
     paddingTop: 52,
     paddingBottom: 12,
     paddingHorizontal: 14,
-    color: '#fff',
   },
   label: {
     fontSize: 14,
     textAlign: 'right',
     fontWeight: '800',
-    color: '#fff',
-    lineHeight: 17,
-    marginTop: 8,
-    marginBottom: 0,
-    paddingHorizontal: 4,
-  },
-    textBlock1: {
-    flex: 1,
-    minWidth: 0,
-    width: '100%',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-    paddingTop: 52,
-    paddingBottom: 12,
-    paddingHorizontal: 14,
-    color: '#000',
-  },
-  label1: {
-    fontSize: 14,
-    textAlign: 'right',
-    fontWeight: '800',
-    color: '#000',
+    color: '#222222',
     lineHeight: 17,
     marginTop: 8,
     marginBottom: 0,
@@ -495,16 +422,7 @@ const parentDashboardCardStyles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
     textAlign: 'right',
-    color: '#fff',
-    fontWeight: '600',
-    marginTop: 4,
-    paddingHorizontal: 4,
-  },
-    subtitle1: {
-    fontSize: 11,
-    lineHeight: 14,
-    textAlign: 'right',
-    color: '#000',
+    color: '#6C6C74',
     fontWeight: '600',
     marginTop: 4,
     paddingHorizontal: 4,
@@ -684,18 +602,16 @@ const StudentSwipeCard: React.FC<{
 };
 
 const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
-  const { width, height: viewportHeight } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
-  const phoneHeight = Math.min(Math.max(viewportHeight - 24, 720), 860);
+  const phoneHeight = Math.min(Math.max(height - 24, 720), 860);
   const shellStyles = useMemo(() => createAppStyles({ phoneWidth, phoneHeight }), [phoneHeight, phoneWidth]);
   const stackFormCards = phoneWidth < 380;
 
   const [schoolCode, setSchoolCode] = useState('');
   const [routes, setRoutes] = useState<BusRoute[]>([]);
   const [students, setStudents] = useState<StudentItem[]>([]);
-  const [routeStops, setRouteStops] = useState<BusStop[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
-  const [selectedStopId, setSelectedStopId] = useState<number | null>(null);
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [driverName, setDriverName] = useState('');
   const [busStartingTime, setBusStartingTime] = useState('');
@@ -703,8 +619,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   const [newRouteName, setNewRouteName] = useState('');
   const [newOrigin, setNewOrigin] = useState('');
   const [newDestination, setNewDestination] = useState('');
-  const [newStopName, setNewStopName] = useState('');
-  const [newStopAddress, setNewStopAddress] = useState('');
   const [activeSection, setActiveSection] = useState<SectionKey>('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -737,11 +651,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   });
 
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0] || null;
-  const selectedRouteStops = useMemo(
-    () => routeStops.filter((stop) => selectedRoute && stop.routeId === selectedRoute.id),
-    [routeStops, selectedRoute]
-  );
-  const selectedStop = selectedRouteStops.find((stop) => stop.id === selectedStopId) || selectedRouteStops[0] || null;
+  const assignedStudentsCount = students.filter((student) => student.assignedRouteId).length;
   const driverCount = routes.filter((route) => route.driverName).length;
   const dashboardCardColumns = useMemo(
     () => [dashboardCards.slice(0, 2), dashboardCards.slice(2, 4), dashboardCards.slice(4, 6)],
@@ -772,7 +682,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     () => buildRouteMapHtml(routeMapSchoolPoint, routeMapRoutes),
     [routeMapRoutes, routeMapSchoolPoint]
   );
-  const totalStopsCount = routeStops.length;
   const automaticDestination = schoolAddress.trim();
   const sectionTabs = useMemo(
     () => [
@@ -792,19 +701,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     if (!automaticDestination) return;
     setNewDestination(automaticDestination);
   }, [automaticDestination]);
-
-  useEffect(() => {
-    if (!selectedRoute) {
-      setSelectedStopId(null);
-      return;
-    }
-
-    if (selectedStopId && selectedRouteStops.some((stop) => stop.id === selectedStopId)) {
-      return;
-    }
-
-    setSelectedStopId(selectedRouteStops[0]?.id || null);
-  }, [selectedRoute, selectedRouteStops, selectedStopId]);
 
   useEffect(() => {
     if (!DEBUG_BUS_MANAGER) return;
@@ -857,7 +753,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
       };
 
       setProfile(nextProfile);
-    } catch {
+    } catch (error) {
     }
   }, []);
 
@@ -884,7 +780,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         index: 0,
         routes: [{ name: 'TeacherLogin' }],
       });
-    } catch {
+    } catch (error) {
       navigation.reset({
         index: 0,
         routes: [{ name: 'TeacherLogin' }],
@@ -1054,54 +950,8 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         const cityHint = extractAddressContext(schoolAddress);
         const mapBias = cityHint ? `${cityHint}` : '';
         const routePalette = ['#E05A47', '#3C7BF4', '#2E8B57', '#9B59B6', '#D68910', '#117A65', '#34495E', '#C0392B'];
-        const routeCount = Math.max(routes.length, 1);
-        const baseLat = nextSchoolPoint?.latitude || 17.385;
-        const baseLng = nextSchoolPoint?.longitude || 78.4867;
-        const schoolAnchor = nextSchoolPoint || {
-          latitude: baseLat,
-          longitude: baseLng,
-          title: 'Institute',
-          description: schoolAddress || 'Institute',
-        };
-
-        const buildSyntheticRoutePoint = (routeIndex: number) => {
-          const angle = (routeIndex / routeCount) * Math.PI * 2;
-          const radiusStep = 0.02;
-
-          return {
-            latitude: baseLat + Math.sin(angle) * radiusStep * (1 + routeIndex * 0.2),
-            longitude: baseLng + Math.cos(angle) * radiusStep * (1 + routeIndex * 0.2),
-          };
-        };
-
-        const buildFallbackStopPoint = (
-          stop: BusStop,
-          stopIndex: number,
-          stopCount: number,
-          routePoint: RouteMapPoint | null,
-          routeIndex: number,
-          routeName: string
-        ) => {
-          const syntheticRoutePoint = buildSyntheticRoutePoint(routeIndex);
-          const endPoint = routePoint || syntheticRoutePoint;
-          const fraction = (stopIndex + 1) / (stopCount + 1);
-          const routeLatDelta = endPoint.latitude - schoolAnchor.latitude;
-          const routeLngDelta = endPoint.longitude - schoolAnchor.longitude;
-          const distance = Math.sqrt(routeLatDelta * routeLatDelta + routeLngDelta * routeLngDelta) || 1;
-          const side = stopIndex % 2 === 0 ? 1 : -1;
-          const offset = 0.0018 * side;
-
-          return {
-            latitude: schoolAnchor.latitude + routeLatDelta * fraction - (routeLngDelta / distance) * offset,
-            longitude: schoolAnchor.longitude + routeLngDelta * fraction + (routeLatDelta / distance) * offset,
-            title: stop.stopName || `Stop ${stopIndex + 1}`,
-            description: stop.stopAddress || `${routeName} stop`,
-          } as RouteMapPoint;
-        };
-
         const nextRoutes = await Promise.all(
           routes.map(async (route, index) => {
-            const stopsForRoute = routeStops.filter((stop) => stop.routeId === route.id);
             const preferredAddress = String(
               isSameAddress(route.destination, schoolAddress) ? route.origin || '' : route.destination || route.origin || ''
             ).trim();
@@ -1120,40 +970,12 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
 
             const lookupAddress = mapBias ? `${preferredAddress}, ${mapBias}` : preferredAddress;
             const point = preferredAddress ? await geocodeAddress(lookupAddress) : null;
-            const stopPoints = (
-              await Promise.all(
-                stopsForRoute.map(async (stop, stopIndex) => {
-                  const stopLookupAddress = String(stop.stopAddress || stop.stopName || '').trim();
-                  const stopPoint = stopLookupAddress
-                    ? await geocodeAddress(mapBias ? `${stopLookupAddress}, ${mapBias}` : stopLookupAddress)
-                    : null;
-
-                  const displayPoint =
-                    stopPoint ||
-                    buildFallbackStopPoint(
-                      stop,
-                      stopIndex,
-                      stopsForRoute.length,
-                      point,
-                      index,
-                      route.routeName
-                    );
-
-                  return {
-                    ...displayPoint,
-                    title: stop.stopName || `Stop ${stopIndex + 1}`,
-                    description: stop.stopAddress || route.routeName,
-                  } as RouteMapPoint;
-                })
-              )
-            ).filter(Boolean) as RouteMapPoint[];
             if (DEBUG_BUS_MANAGER) {
               console.log('[BusManagerDashboard] [map] route geocoded', {
                 routeId: route.id,
                 routeName: route.routeName,
                 latitude: point?.latitude || null,
                 longitude: point?.longitude || null,
-                stopPointCount: stopPoints.length,
                 usedFallbackPoint: !point,
               });
             }
@@ -1161,7 +983,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
               routeId: route.id,
               routeName: route.routeName,
               point,
-              stops: stopPoints,
               routeLabel,
               accent: routePalette[index % routePalette.length],
             } as RouteMapRoute;
@@ -1184,6 +1005,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
             usedFallbackPoint: !route.point,
           })),
           cityHint,
+          routeMapHtmlLength: routeMapHtml.length,
         });
       } catch (error) {
         if (cancelled) return;
@@ -1194,7 +1016,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
             routeId: route.id,
             routeName: route.routeName,
             point: null,
-            stops: [],
             routeLabel:
               route.origin && route.destination
                 ? `${route.origin} → ${route.destination}`
@@ -1208,7 +1029,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
       setRouteMapLoading(false);
     };
 
-    loadRouteMapPoints().catch((error) => {
+    void loadRouteMapPoints().catch((error) => {
       if (cancelled) return;
       console.error('[BusManagerDashboard] loadRouteMapPoints error:', error);
       setRouteMapSchoolPoint(null);
@@ -1217,7 +1038,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
           routeId: route.id,
           routeName: route.routeName,
           point: null,
-          stops: [],
           routeLabel:
             route.origin && route.destination
               ? `${route.origin} → ${route.destination}`
@@ -1232,7 +1052,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     return () => {
       cancelled = true;
     };
-  }, [geocodeAddress, loadSchoolCoordinates, routeStops, routes, schoolAddress, schoolCode, selectedRouteId]);
+  }, [geocodeAddress, loadSchoolCoordinates, routes, schoolAddress, schoolCode]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -1271,12 +1091,10 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
 
       const nextRoutes = Array.isArray(response.data?.data?.routes) ? response.data.data.routes : [];
       const nextStudents = Array.isArray(response.data?.data?.students) ? response.data.data.students : [];
-      const nextStops = Array.isArray(response.data?.data?.stops) ? response.data.data.stops : [];
 
       if (DEBUG_BUS_MANAGER) {
         console.log('[BusManagerDashboard] [map] dashboard bootstrap loaded', {
           routeCount: nextRoutes.length,
-          stopCount: nextStops.length,
           studentCount: nextStudents.length,
           routeNames: nextRoutes.slice(0, 10).map((route: any) => String(route.route_name || '')),
           routeSamples: nextRoutes.slice(0, 5).map((route: any) => ({
@@ -1323,19 +1141,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
           section: student.section || null,
           assignedRouteId: student.route_id ? Number(student.route_id) : null,
           assignedRouteName: student.route_name || null,
-          assignedStopId: student.stop_id ? Number(student.stop_id) : null,
-          assignedStopName: student.stop_name || null,
           isDisabled: Boolean(Number(student.is_disabled || 0)),
-        }))
-      );
-
-      setRouteStops(
-        nextStops.map((stop: any) => ({
-          id: Number(stop.id),
-          routeId: Number(stop.route_id),
-          stopName: String(stop.stop_name || ''),
-          stopAddress: stop.stop_address || null,
-          stopOrder: Number(stop.stop_order || 0),
         }))
       );
 
@@ -1526,72 +1332,10 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     }
   }, [automaticDestination, loadDashboard, newDestination, newOrigin, newRouteName, schoolCode, saving]);
 
-  const handleAddStop = useCallback(async () => {
-    if (!selectedRoute) {
-      Alert.alert('Select a route', 'Please select a route before adding stops.');
-      return;
-    }
-    if (saving) return;
-    if (!newStopName.trim()) {
-      Alert.alert('Stop name required', 'Please enter a stop name.');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      const payload = {
-        schoolCode,
-        stopName: newStopName.trim(),
-        stop_name: newStopName.trim(),
-        stopAddress: newStopAddress.trim() || null,
-        stop_address: newStopAddress.trim() || null,
-        stopOrder: selectedRouteStops.length + 1,
-        stop_order: selectedRouteStops.length + 1,
-      };
-
-      if (DEBUG_BUS_MANAGER) {
-        console.log('[BusManagerDashboard] add stop request', {
-          url: `${API_BASE}/bus-manager/routes/${selectedRoute.id}/stops`,
-          routeId: selectedRoute.id,
-          routeName: selectedRoute.routeName,
-          payload,
-        });
-      }
-
-      await axios.post(`${API_BASE}/bus-manager/routes/${selectedRoute.id}/stops`, payload);
-      setNewStopName('');
-      setNewStopAddress('');
-      await loadDashboard();
-      Alert.alert('Success', 'Stop added successfully.');
-    } catch (error: any) {
-      if (DEBUG_BUS_MANAGER) {
-        console.error('[BusManagerDashboard] add stop failed', {
-          status: error?.response?.status || null,
-          responseData: error?.response?.data || null,
-          message: error?.message || String(error),
-        });
-      }
-      Alert.alert(
-        'Add stop failed',
-        getApiErrorMessage(error, 'Unable to add this stop.')
-      );
-    } finally {
-      setSaving(false);
-    }
-  }, [loadDashboard, newStopAddress, newStopName, schoolCode, saving, selectedRoute, selectedRouteStops.length]);
-
   const handleAssignStudent = useCallback(
     async (username: string) => {
       if (!selectedRoute) {
         Alert.alert('Select a route', 'Please select a bus route before assigning students.');
-        return;
-      }
-      if (selectedRouteStops.length === 0) {
-        Alert.alert('Add a stop first', 'Please add at least one stop for this route before assigning students.');
-        return;
-      }
-      if (!selectedStop) {
-        Alert.alert('Select a stop', 'Please select the stop for this student.');
         return;
       }
       if (saving) return;
@@ -1601,8 +1345,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         await axios.post(`${API_BASE}/bus-manager/students/${encodeURIComponent(username)}/assign`, {
           schoolCode,
           routeId: selectedRoute.id,
-          stopId: selectedStop?.id || null,
-          stop_id: selectedStop?.id || null,
         });
         await loadDashboard();
         Alert.alert('Success', 'Student assigned successfully.');
@@ -1615,7 +1357,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         setSaving(false);
       }
     },
-    [loadDashboard, schoolCode, selectedRoute, selectedRouteStops.length, selectedStop, saving]
+    [loadDashboard, schoolCode, selectedRoute, saving]
   );
 
   const handleDeleteStudent = useCallback(
@@ -1708,9 +1450,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                   key={student.username}
                   style={localStyles.disabledStudentRow}
                   onPress={() => {
-                    handleEnableStudent(student.username).catch((error) => {
-                      console.error('[BusManagerDashboard] enable student failed:', error);
-                    });
+                    void handleEnableStudent(student.username);
                   }}
                 >
                   <View style={localStyles.disabledStudentTextWrap}>
@@ -1786,9 +1526,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                       <Text style={localStyles.summaryLine}>
                         {(selectedRoute.origin || 'Unknown') + ' to ' + (selectedRoute.destination || 'Unknown')}
                       </Text>
-                      <Text style={localStyles.summaryLine}>
-                        Assigning to: {selectedStop?.stopName || 'Add a stop first'}
-                      </Text>
                       <View style={localStyles.studentPageStatsRow}>
                         <View style={localStyles.studentPageStat}>
                           <Text style={localStyles.studentPageStatValue}>{visibleEligibleStudents.length}</Text>
@@ -1804,35 +1541,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.emptyText}>No route selected yet.</Text>
                   )}
                 </View>
-
-                {selectedRoute ? (
-                  <View style={localStyles.stopSelectPanel}>
-                    <Text style={localStyles.cardPanelTitle}>Select stop</Text>
-                    {selectedRouteStops.length === 0 ? (
-                      <Text style={localStyles.emptyText}>Add stops on the Routes screen before assigning students.</Text>
-                    ) : (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={localStyles.stopChipRow}>
-                        {selectedRouteStops.map((stop, index) => {
-                          const active = stop.id === selectedStop?.id;
-                          return (
-                            <Pressable
-                              key={stop.id}
-                              style={[localStyles.stopChip, active && localStyles.stopChipActive]}
-                              onPress={() => setSelectedStopId(stop.id)}
-                            >
-                              <Text style={[localStyles.stopChipNumber, active && localStyles.stopChipNumberActive]}>
-                                {index + 1}
-                              </Text>
-                              <Text style={[localStyles.stopChipText, active && localStyles.stopChipTextActive]} numberOfLines={1}>
-                                {stop.stopName}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
-                    )}
-                  </View>
-                ) : null}
 
                 <View style={localStyles.sectionHeaderRow}>
                   <Text style={localStyles.sectionTitle}>Students</Text>
@@ -1872,13 +1580,11 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                       <StudentSwipeCard
                         key={student.username}
                         student={student}
-                        routeName={student.assignedStopName || student.assignedRouteName || assignedRoute?.routeName || 'Unassigned'}
+                        routeName={student.assignedRouteName || assignedRoute?.routeName || 'Unassigned'}
                         onAssign={() => handleAssignStudent(student.username)}
                         onDelete={() => handleDeleteStudent(student.username)}
                         onDisable={() => {
-                          toggleDisableStudent(student.username).catch((error) => {
-                            console.error('[BusManagerDashboard] toggle student failed:', error);
-                          });
+                          void toggleDisableStudent(student.username);
                         }}
                         disabled={disabledStudentUsernameSet.has(student.username)}
                       />
@@ -2030,7 +1736,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                   </View>
                 ) : routeMapSchoolPoint || routeMapRoutes.length > 0 ? (
                   <WebView
-                    key={`bus-map-${schoolAddress}-${routeMapRoutes.length}-${totalStopsCount}`}
+                    key={`bus-map-${schoolAddress}-${routeMapRoutes.length}`}
                     originWhitelist={['*']}
                     source={{ html: routeMapHtml }}
                     style={localStyles.routeMapCanvas}
@@ -2061,10 +1767,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.summaryPillValue}>{driverCount}</Text>
                     <Text style={localStyles.summaryPillLabel}>Drivers</Text>
                   </View>
-                  <View style={localStyles.summaryPill}>
-                    <Text style={localStyles.summaryPillValue}>{totalStopsCount}</Text>
-                    <Text style={localStyles.summaryPillLabel}>Stops</Text>
-                  </View>
 		                </View>
               </>
               ) : null}
@@ -2080,11 +1782,12 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                 <Text style={localStyles.sectionSubtitle}>
                   Tap one route to work on it. The active route is highlighted below.
                 </Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={localStyles.routeStrip}>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={localStyles.routeStrip}>
                   {routes.map((route) => {
                     const active = route.id === selectedRouteId;
                     const routeStudents = students.filter((student) => addressMatchesRoute(student.address, route));
-                    const routeStopCount = routeStops.filter((stop) => stop.routeId === route.id).length;
+                    const assignedCount = routeStudents.length;
                     const activeCount = routeStudents.filter((student) => !disabledStudentUsernameSet.has(student.username)).length;
                     const disabledCount = routeStudents.filter((student) => disabledStudentUsernameSet.has(student.username)).length;
                     return (
@@ -2097,7 +1800,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                         onPress={() => setSelectedRouteId(route.id)}
                       >
                         <View style={[parentDashboardCardStyles.card, active && parentDashboardCardStyles.cardActive]}>
-                          <View >
+                          <View style={shellStyles.dashboardGridCornerAccent}>
                             <LinearGradient
                             colors={[...quickActionGradientColors]}
                             start={{ x: 0.05, y: 0.05 }}
@@ -2122,9 +1825,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                                 </Text>
                                 <Text style={localStyles.routeCardFooterText} numberOfLines={1}>
                                   {disabledCount} disabled
-                                </Text>
-                                <Text style={localStyles.routeCardFooterText} numberOfLines={1}>
-                                  {routeStopCount} stops
                                 </Text>
                               </View>
                             </View>
@@ -2152,9 +1852,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                       <Text style={localStyles.summaryLine}>
                         Experience: {selectedRoute.driverExperience || 'Not assigned'}
                       </Text>
-                      <Text style={localStyles.summaryLine}>
-                        Stops: {selectedRouteStops.length}
-                      </Text>
                       <TouchableOpacity
                         style={localStyles.eligibleStudentsButton}
                         onPress={() => setShowEligibleStudentsPage(true)}
@@ -2169,154 +1866,133 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
 	                    <Text style={localStyles.emptyText}>No route selected yet.</Text>
 	                  )}
 	                </View>
-
-                  <View style={localStyles.cardPanel}>
-                    <Text style={localStyles.cardPanelTitle}>Route stops</Text>
-                    {selectedRoute ? (
-                      <>
-                        {selectedRouteStops.length === 0 ? (
-                          <Text style={localStyles.emptyText}>No stops added yet. Add the first stop for this route.</Text>
-                        ) : (
-                          <View style={localStyles.stopList}>
-                            {selectedRouteStops.map((stop, index) => {
-                              const active = stop.id === selectedStop?.id;
-                              return (
-                                <Pressable
-                                  key={stop.id}
-                                  style={[localStyles.stopRow, active && localStyles.stopRowActive]}
-                                  onPress={() => setSelectedStopId(stop.id)}
-                                >
-                                  <View style={[localStyles.stopOrderBadge, active && localStyles.stopOrderBadgeActive]}>
-                                    <Text style={[localStyles.stopOrderText, active && localStyles.stopOrderTextActive]}>
-                                      {index + 1}
-                                    </Text>
-                                  </View>
-                                  <View style={localStyles.stopRowTextWrap}>
-                                    <Text style={[localStyles.stopRowTitle, active && localStyles.stopRowTitleActive]} numberOfLines={1}>
-                                      {stop.stopName}
-                                    </Text>
-                                    <Text style={[localStyles.stopRowAddress, active && localStyles.stopRowAddressActive]} numberOfLines={2}>
-                                      {stop.stopAddress || 'No address added'}
-                                    </Text>
-                                  </View>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        )}
-
-                        <View style={localStyles.stopForm}>
-                          <TextInput
-                            value={newStopName}
-                            onChangeText={setNewStopName}
-                            placeholder="Stop name"
-                            placeholderTextColor="#8C97A4"
-                            style={localStyles.input}
-                            editable={!saving}
-                          />
-                          <TextInput
-                            value={newStopAddress}
-                            onChangeText={setNewStopAddress}
-                            placeholder="Stop address or area"
-                            placeholderTextColor="#8C97A4"
-                            style={localStyles.input}
-                            editable={!saving}
-                          />
-                          <TouchableOpacity
-                            style={[localStyles.secondaryButton, saving && localStyles.buttonDisabled]}
-                            onPress={handleAddStop}
-                            disabled={saving}
-                          >
-                            <Text style={localStyles.secondaryButtonText}>Add Stop</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </>
-                    ) : (
-                      <Text style={localStyles.emptyText}>Select a route to add stops.</Text>
-                    )}
-                  </View>
 	              </View>
 	              ) : null}
 
-              
-{activeSection === 'overview' ? (
-  <View style={localStyles.quickActionsSection}>
-    <View style={localStyles.sectionTitleRow}>
-      <Ionicons name="grid-outline" size={18} color="#1C1C1C" />
-      <Text style={localStyles.sectionTitle}>Quick Actions</Text>
-    </View>
+              {/* <View style={localStyles.routeMapBoard}>
+                <View style={localStyles.routeMapHeader}>
+                  <View style={localStyles.routeMapHeaderLeft}>
+                    <View style={localStyles.routeMapSchoolPin}>
+                      <Ionicons name="map-outline" size={18} color="#1C1C1C" />
+                    </View>
+                    <View>
+                      <Text style={localStyles.routeMapHeaderTitle}>Route overview</Text>
+                      <Text style={localStyles.routeMapHeaderSubtitle}>
+                        {schoolAddress
+                          ? `All routes shown from the institute address to each route endpoint`
+                          : 'Institute address will appear here when available'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={localStyles.routeMapLegend}>
+                    <View style={localStyles.routeMapLegendItem}>
+                      <Ionicons name="business" size={12} color="#3F3F40" />
+                      <Text style={localStyles.routeMapLegendText}>Institute</Text>
+                    </View>
+                    <View style={localStyles.routeMapLegendItem}>
+                      <Ionicons name="ellipse" size={12} color="#3C7BF4" />
+                      <Text style={localStyles.routeMapLegendText}>Route stops</Text>
+                    </View>
+                  </View>
+                </View>
 
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: 4,
-        paddingVertical: 4,
-      }}
-    >
-      {dashboardCardColumns.flat().map((card) => (
-        <Pressable
-          key={card.title}
-          style={[
-            parentDashboardCardStyles.card,
-            {
-              width: 220,
-              marginRight: 12,
-            },
-          ]}
-          onPress={() => scrollToSection(card.target)}
-        >
-          <View style={shellStyles.dashboardGridCornerAccent}>
-            <LinearGradient
-              colors={['#d2c2eeff', '#a174eb', '#6826df']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={shellStyles.dashboardGridCornerAccentFill}
-            />
-          </View>
-
-         <View
-  style={[
-    parentDashboardCardStyles.iconWrap,
-    {
-      alignItems: 'center',
-      justifyContent: 'center',
-      width: '100%',
-    },
-  ]}
->
-  <Ionicons
-    name={card.icon as any}
-    size={32}
-    color="#000"
-  />
-</View>
-
-          <View style={[
-    parentDashboardCardStyles.cardContent,
-    { marginTop: -40 }
-  ]}>
-            <View style={parentDashboardCardStyles.textBlock1}>
-              <Text
-                style={parentDashboardCardStyles.label1}
-                numberOfLines={2}
-              >
-                {card.title}
-              </Text>
-
-              <Text
-                style={parentDashboardCardStyles.subtitle1}
-                numberOfLines={2}
-              >
-                {card.subtitle}
-              </Text>
-            </View>
-          </View>
-        </Pressable>
-      ))}
-    </ScrollView>
-  </View>
-) : null}
+                {routeMapLoading ? (
+                  <View style={localStyles.mapFallback}>
+                    <Text style={localStyles.mapFallbackText}>Loading route overview...</Text>
+                  </View>
+                ) : routeMapSchoolPoint || routeMapRoutes.length > 0 ? (
+                  <WebView
+                    key={`bus-map-${schoolAddress}-${routeMapRoutes.length}`}
+                    originWhitelist={['*']}
+                    source={{ html: routeMapHtml }}
+                    style={localStyles.routeMapCanvas}
+                    javaScriptEnabled
+                    domStorageEnabled
+                    startInLoadingState
+                    renderLoading={() => (
+                      <View style={localStyles.mapFallback}>
+                        <Text style={localStyles.mapFallbackText}>Loading route overview...</Text>
+                      </View>
+                    )}
+                  />
+                ) : (
+                  <View style={localStyles.mapFallback}>
+                    <Text style={localStyles.mapFallbackText}>
+                      {routeMapError || 'The route overview will appear here once institute and route addresses are geocoded.'}
+                    </Text>
+                  </View>
+                )}
+              </View> */}
+ {/* {activeSection === 'overview' ? (
+              <View style={localStyles.quickActionsSection}>
+                <View style={localStyles.sectionTitleRow}>
+                  <Ionicons name="grid-outline" size={18} color="#1C1C1C" />
+                  <Text style={localStyles.sectionTitle}>Quick Actions</Text>
+                </View>
+                <View style={localStyles.quickActionsGrid}>
+                  {dashboardCardColumns.map((column, columnIndex) => (
+                    <View key={`bus-quick-actions-column-${columnIndex}`} style={localStyles.quickActionsColumn}>
+                      {column.map((card) => (
+                        <Pressable
+                          key={card.title}
+                          style={localStyles.quickActionCard}
+                          onPress={() => scrollToSection(card.target)}
+                        >
+                          <LinearGradient
+                            colors={[...quickActionGradientColors]}
+                            start={{ x: 0.05, y: 0.05 }}
+                            end={{ x: 0.95, y: 0.95 }}
+                            style={localStyles.quickActionGradient}
+                          >
+                            <View style={localStyles.quickActionIconWrap}>
+                              <Ionicons name={card.icon as any} size={22} color="#000" />
+                            </View>
+                            <Text style={localStyles.quickActionTitle}>{card.title}</Text>
+                            <Text style={localStyles.quickActionSubtitle}>{card.subtitle}</Text>
+                          </LinearGradient>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              </View>
+              ) : null} */}
+              {activeSection === 'overview' ? (
+              <View style={localStyles.quickActionsSection}>
+                <View style={localStyles.sectionTitleRow}>
+                  <Ionicons name="grid-outline" size={18} color="#1C1C1C" />
+                  <Text style={localStyles.sectionTitle}>Quick Actions</Text>
+                </View>
+                <View style={localStyles.quickActionsGrid}>
+                  {dashboardCardColumns.map((column, columnIndex) => (
+                    <View key={`bus-quick-actions-column-${columnIndex}`} style={localStyles.quickActionsColumn}>
+                      {column.map((card) => (
+                        <Pressable
+                          key={card.title}
+ style={[
+                          parentDashboardCardStyles.cardWrapper,
+                        ]}                          onPress={() => scrollToSection(card.target)}
+                        >
+                     <View style={shellStyles.dashboardGridCornerAccent}>
+                            <LinearGradient
+                              colors={['#d2c2eeff', '#a174eb', '#6826df']}
+                              start={{ x: 0, y: 0 }}
+                              end={{ x: 1, y: 1 }}
+                              style={shellStyles.dashboardGridCornerAccentFill}
+                            />
+                          </View>
+                            <View style={localStyles.quickActionIconWrap}>
+                              <Ionicons name={card.icon as any} size={22} color="#000" />
+                            </View>
+                            <Text style={localStyles.quickActionTitle}>{card.title}</Text>
+                            <Text style={localStyles.quickActionSubtitle}>{card.subtitle}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              </View>
+              ) : null}
 
               {loading ? (
                 <View style={localStyles.infoCard}>
@@ -3160,7 +2836,7 @@ const localStyles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   routeCardFooterText: {
-    color: '#fff',
+    color: '#6C6C74',
     fontSize: 10,
     lineHeight: 13,
     fontWeight: '700',
@@ -3200,67 +2876,6 @@ const localStyles = StyleSheet.create({
   },
   summaryLine: {
     color: '#5B5B60',
-    marginTop: 4,
-  },
-  stopList: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  stopRow: {
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E4EA',
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  stopRowActive: {
-    backgroundColor: '#3F3F40',
-    borderColor: '#3F3F40',
-  },
-  stopOrderBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F3F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stopOrderBadgeActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  stopOrderText: {
-    color: '#2B2B2B',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  stopOrderTextActive: {
-    color: '#1C1C1C',
-  },
-  stopRowTextWrap: {
-    flex: 1,
-    minWidth: 0,
-  },
-  stopRowTitle: {
-    color: '#131313',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  stopRowTitleActive: {
-    color: '#FFFFFF',
-  },
-  stopRowAddress: {
-    color: '#6A6A70',
-    fontSize: 11.5,
-    lineHeight: 16,
-    marginTop: 3,
-  },
-  stopRowAddressActive: {
-    color: '#EDEDED',
-  },
-  stopForm: {
     marginTop: 4,
   },
   eligibleStudentsButton: {
@@ -3321,56 +2936,6 @@ const localStyles = StyleSheet.create({
     backgroundColor: '#F6F6F7',
     padding: 14,
     marginBottom: 12,
-  },
-  stopSelectPanel: {
-    borderRadius: 18,
-    backgroundColor: '#F6F6F7',
-    padding: 14,
-    marginBottom: 12,
-  },
-  stopChipRow: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  stopChip: {
-    minHeight: 40,
-    maxWidth: 190,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#D8D8DC',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  stopChipActive: {
-    backgroundColor: '#3F3F40',
-    borderColor: '#3F3F40',
-  },
-  stopChipNumber: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#F1F3F6',
-    color: '#2B2B2B',
-    textAlign: 'center',
-    lineHeight: 22,
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  stopChipNumberActive: {
-    backgroundColor: '#FFFFFF',
-    color: '#1C1C1C',
-  },
-  stopChipText: {
-    flexShrink: 1,
-    color: '#2B2B2B',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  stopChipTextActive: {
-    color: '#FFFFFF',
   },
   studentPageStatsRow: {
     flexDirection: 'row',

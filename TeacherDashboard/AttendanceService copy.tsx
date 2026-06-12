@@ -89,12 +89,6 @@ interface AttendanceCallbackData {
 
 type AttendanceSlot = 'morning' | 'evening';
 
-/* ===================== UTILITIES ===================== */
-
-const isSunday = (date: Date = new Date()): boolean => {
-  return date.getDay() === 0; // 0 is Sunday in JavaScript
-};
-
 const getTodayKey = () => new Date().toISOString().split('T')[0];
 
 const parseTimeToMinutes = (timeValue?: string | null): number | null => {
@@ -102,6 +96,7 @@ const parseTimeToMinutes = (timeValue?: string | null): number | null => {
   const raw = String(timeValue).trim();
   if (!raw) return null;
 
+  // Accept "HH:mm", "HH:mm:ss", or datetime strings like "YYYY-MM-DD HH:mm:ss"
   const timePart = raw.includes('T')
     ? raw.split('T')[1]
     : raw.includes(' ')
@@ -230,6 +225,14 @@ const refreshAttendanceWindow = async () => {
 
 const getCurrentSlot = (now = new Date()): AttendanceSlot | null => {
   const minutes = now.getHours() * 60 + now.getMinutes();
+  // Debug: log once per minute boundary
+  if (now.getSeconds() === 0) {
+    console.log('🕒 Slot check', {
+      time: now.toTimeString().split(' ')[0],
+      minutes,
+      window: attendanceWindow,
+    });
+  }
   if (
     minutes >= attendanceWindow.morningStartMinutes &&
     minutes < attendanceWindow.morningEndMinutes
@@ -360,11 +363,6 @@ const isLateMorning = (now = new Date()): boolean => {
 
 const checkAndNotifyMorningAbsence = async () => {
   const now = new Date();
-  if (isSunday(now)) {
-    console.log('🚫 Skipping morning absence check (Sunday)');
-    return;
-  }
-
   const minutes = now.getHours() * 60 + now.getMinutes();
   if (minutes < attendanceWindow.morningEndMinutes) return;
 
@@ -379,12 +377,6 @@ const checkAndNotifyMorningAbsence = async () => {
 };
 
 const markAttendanceForSlotIfNeeded = async () => {
-  const now = new Date();
-  if (isSunday(now)) {
-    console.log('🚫 Skipping attendance marking (Sunday)');
-    return;
-  }
-
   const userType = await AsyncStorage.getItem('userType');
   const username = await AsyncStorage.getItem('username');
   const schoolCode = await AsyncStorage.getItem('schoolCode');
@@ -404,6 +396,7 @@ const markAttendanceForSlotIfNeeded = async () => {
 
   const position = await getCurrentPositionAsync();
   const { latitude, longitude, accuracy } = position.coords;
+  const now = new Date();
 
   const payload = {
     username,
@@ -444,7 +437,9 @@ const markAttendanceForSlotIfNeeded = async () => {
       storageEntries.push([getMorningPresentKey(today), 'true']);
     }
 
-    await AsyncStorage.multiSet([...storageEntries]);
+    await AsyncStorage.multiSet([
+      ...storageEntries,
+    ]);
 
     if (
       slot === 'evening' &&
@@ -485,6 +480,7 @@ const startForegroundCheckingLoop = async () => {
 
   await refreshAttendanceWindow();
 
+  // Run once immediately
   checkAndNotifyMorningAbsence().catch(err =>
     console.error('Morning absence notification check failed:', err?.message || err)
   );
@@ -506,18 +502,14 @@ const startForegroundCheckingLoop = async () => {
 };
 
 export const startPersistentAttendanceTracking = async (): Promise<void> => {
-  const now = new Date();
-  if (isSunday(now)) {
-    console.log('🚫 Skipping persistent attendance tracking (Sunday)');
-    return;
-  }
-
   const userType = await AsyncStorage.getItem('userType');
   if (userType !== 'teacher') return;
   if (foregroundServiceRunning) return;
 
   await refreshAttendanceWindow();
 
+  // Android 14+ crashes if location foreground service starts without
+  // runtime location permission already granted.
   const permissionGranted = await requestLocationPermission();
   if (!permissionGranted) {
     console.warn('⚠️ Persistent attendance tracking not started: location permission denied');
@@ -578,12 +570,6 @@ export const stopPersistentAttendanceTracking = async (): Promise<void> => {
 };
 
 export const resumePersistentAttendanceTrackingIfNeeded = async (): Promise<void> => {
-  const now = new Date();
-  if (isSunday(now)) {
-    console.log('🚫 Skipping resume of persistent attendance tracking (Sunday)');
-    return;
-  }
-
   const userType = await AsyncStorage.getItem('userType');
   const serviceActive = await AsyncStorage.getItem('attendanceServiceActive');
 
@@ -608,8 +594,8 @@ const isWithinTrackingWindow = (now = new Date()): boolean => {
 
   const within =
     (totalMinutes >= morningStart && totalMinutes < morningEnd) ||
-    (totalMinutes >= eveningStart && totalMinutes < eveningEnd);
-
+    (totalMinutes >= eveningStart && totalMinutes < eveningEnd)
+  ;
   if (now.getSeconds() === 0) {
     console.log('⏱️ Window check', {
       time: now.toTimeString().split(' ')[0],
@@ -644,17 +630,6 @@ const startAttendanceTrackingInternal = async (
 const evaluateAttendanceWindow = async (
   callback?: (data: AttendanceCallbackData) => void
 ) => {
-  const now = new Date();
-  if (isSunday(now)) {
-    await stopAttendanceTrackingInternal();
-    callback?.({
-      status: '🚫 Attendance tracking disabled (Sunday)',
-      error: false,
-      showManualEntry: false,
-    });
-    return;
-  }
-
   const userType = await AsyncStorage.getItem('userType');
   if (userType !== 'teacher') {
     await stopAttendanceTrackingInternal();
@@ -679,13 +654,11 @@ export const startAttendanceWindowScheduler = async (
   await refreshAttendanceWindow();
   await evaluateAttendanceWindow(callback);
 
+  // Recheck every minute to start/stop exactly by time window
   attendanceSchedulerInstance = setInterval(() => {
-    const now = new Date();
-    if (!isSunday(now)) {
-      evaluateAttendanceWindow(callback).catch(err =>
-        console.error('Attendance scheduler error:', err)
-      );
-    }
+    evaluateAttendanceWindow(callback).catch(err =>
+      console.error('Attendance scheduler error:', err)
+    );
   }, 60 * 1000);
 
   return () => {
@@ -705,16 +678,6 @@ export const startAttendanceService = async (
   callback?: (data: AttendanceCallbackData) => void,
   selectedRadius: number | null = null
 ): Promise<() => void> => {
-  const now = new Date();
-  if (isSunday(now)) {
-    callback?.({
-      status: '🚫 Attendance service disabled (Sunday)',
-      error: false,
-      showManualEntry: false,
-    });
-    throw new Error('Attendance service disabled on Sundays');
-  }
-
   try {
     await refreshAttendanceWindow();
     const username = await AsyncStorage.getItem('username');
@@ -817,18 +780,9 @@ const monitorAttendance = (
 
   watchId = Geolocation.watchPosition(
     async (position: GeoPosition) => {
-      const currentTime = new Date();
-      if (isSunday(currentTime)) {
-        callback?.({
-          status: '🚫 Attendance tracking disabled (Sunday)',
-          error: false,
-          showManualEntry: false,
-        });
-        return;
-      }
-
       try {
         const { latitude, longitude, accuracy } = position.coords;
+        const currentTime = new Date();
         const distanceMeters = getDistanceInMeters(
           latitude,
           longitude,
@@ -855,6 +809,7 @@ const monitorAttendance = (
           locationVerified: !position.mocked && accuracy <= 100,
         };
 
+        // Send to backend
         const response = await axios.post(
           `${API_BASE_URL}/teacher-attendancetracking`,
           payload,
@@ -874,6 +829,7 @@ const monitorAttendance = (
           console.warn('⚠️ Attendance response did not include isPresent; using local status');
         }
 
+        // Only show alert if status changed (suppress evening present)
         if (slotNow === 'evening' && statusFromBackend === 'present') {
           callback?.({
             status: '⏳ Monitoring',
@@ -939,7 +895,6 @@ const monitorAttendance = (
     lastStatus = null;
   };
 };
-
 /* ===================== UTILITIES ===================== */
 
 const saveAttendanceLocally = async (data: AttendancePayload) => {

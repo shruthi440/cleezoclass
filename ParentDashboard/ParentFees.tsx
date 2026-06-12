@@ -17,7 +17,7 @@ import axios from 'axios';
 import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
+import ParentFooter from './ParentFooter';
 import { createAppStyles } from '../App.styles';
 import { ErrorContext } from '../ErrorContext';
 import { RootStackParamList } from '../types';
@@ -656,12 +656,31 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
               <View style={styles.summaryGradientIconWrap}>
                 <MaterialIcons name="payments" size={24} color="#1A1A1A" />
               </View>
-              <View style={styles.summaryCardContent}>
-                <Text style={styles.summaryGradientLabel}>Discount</Text>
-                <Text style={styles.summaryGradientValue}>{formatINR(summaryDiscount)}</Text>
-                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
-                <Text style={styles.summaryGradientValue}>{formatINR(summaryTotalFee)}</Text>
-              </View>
+<View style={styles.summaryCardContent}>
+  <View style={styles.row}>
+    <View style={styles.itemContainer}>
+      <Text style={styles.summaryGradientLabel}>Discount</Text>
+      <Text
+        style={styles.summaryGradientValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {formatINR(summaryDiscount)}
+      </Text>
+    </View>
+
+    <View style={styles.itemContainer}>
+      <Text style={styles.summaryGradientLabel}> Total Amount</Text>
+      <Text
+        style={styles.summaryGradientValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {formatINR(summaryTotalFee)}
+      </Text>
+    </View>
+  </View>
+</View>
             </LinearGradient>
             <LinearGradient
               colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
@@ -672,12 +691,31 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
               <View style={styles.summaryGradientIconWrap}>
                 <MaterialIcons name="account-balance-wallet" size={24} color="#1A1A1A" />
               </View>
-              <View style={styles.summaryCardContent}>
-                <Text style={styles.summaryGradientLabel}>Due</Text>
-                <Text style={styles.summaryGradientValue}>{formatINR(summaryDue)}</Text>
-                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
-                <Text style={styles.summaryGradientValue}>{formatINR(summaryPaid)}</Text>
-              </View>
+            <View style={styles.summaryCardContent}>
+  <View style={styles.row}>
+    <View style={styles.itemContainer}>
+      <Text style={styles.summaryGradientLabel}>Due</Text>
+      <Text
+        style={styles.summaryGradientValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {formatINR(summaryDue)}
+      </Text>
+    </View>
+
+    <View style={styles.itemContainer}>
+      <Text style={styles.summaryGradientLabel}>Amount Paid</Text>
+      <Text
+        style={styles.summaryGradientValue}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {formatINR(summaryPaid)}
+      </Text>
+    </View>
+  </View>
+</View>
             </LinearGradient>
           </View>
 
@@ -710,6 +748,8 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
           </View>
         </View>
       </ScrollView>
+              <ParentFooter />
+
     </View>
   );
 
@@ -773,6 +813,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
+row: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  width: '100%',
+},
+
+itemContainer: {
+  flex: 1,
+  alignItems: 'center',
+},
+
+summaryGradientValue: {
+  fontSize: 12, // reduce from 22-24 if larger
+  fontWeight: '700',
+  color: '#FFF',
+},
   feeLegendDot: {
     width: 10,
     height: 10,
@@ -784,21 +841,29 @@ const styles = StyleSheet.create({
     color: '#333',
     fontWeight: '700',
   },
-  feeChartCard: {
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
-    overflow: 'hidden',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  feeChartGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'flex-end',
-    minHeight: 220,
-  },
+feeChartCard: {
+  borderRadius: 16,
+  paddingVertical: 10, // Reduced from 18 to 10
+  paddingHorizontal: 12,
+  overflow: 'hidden',
+  backgroundColor: '#FFFFFF',
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+},
+feeChartGrid: {
+  flexDirection: 'row',
+  justifyContent: 'space-around',
+  alignItems: 'flex-end',
+  minHeight: 120, // Reduced from 150 to 120
+},
+feeChartBarTrack: {
+  width: '32%',
+  height: 100, // Reduced from 120 to 100
+  backgroundColor: 'rgba(17,24,39,0.08)',
+  borderRadius: 16,
+  overflow: 'hidden',
+  justifyContent: 'flex-end',
+},
   feeChartItem: {
     flex: 1,
     alignItems: 'center',
@@ -812,14 +877,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  feeChartBarTrack: {
-    width: '62%',
-    height: 170,
-    backgroundColor: 'rgba(17,24,39,0.08)',
-    borderRadius: 16,
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
-  },
+
   feeChartBarFill: {
     width: '100%',
     borderTopLeftRadius: 16,
@@ -885,12 +943,12 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
     marginBottom: 8,
+
   },
   summaryGradientCard: {
     flex: 1,
-    minHeight: 210,
+    minHeight: 150,
     borderRadius: 28,
     padding: 16,
     overflow: 'hidden',
@@ -980,3 +1038,4 @@ const styles = StyleSheet.create({
 });
 
 export default ParentFees;
+  

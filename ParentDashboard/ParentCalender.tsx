@@ -30,6 +30,7 @@ import { BarChart } from 'react-native-chart-kit';
 import axios from 'axios';
 
 import RNFS from 'react-native-fs';
+import ParentFooter from './ParentFooter';
 
 
 
@@ -1275,6 +1276,7 @@ useEffect(() => {
           {studentData ? <CalendarView studentData={studentData} appStyles={appStyles} /> : <ActivityIndicator size="large" color="#000" />}
         </View>
       </ScrollView>
+      <ParentFooter/>
     </SafeAreaView>
   );
 };

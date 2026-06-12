@@ -31,7 +31,7 @@ import sendIcon from '../icons/application.png'
 import usersicon from '../icons/user (1).png'
 import editIcon from '../icons/edit.png'
 import { useNextClass } from '../NextClassContext';
-
+import LinearGradient from 'react-native-linear-gradient';
 /* ---------------- TYPES ---------------- */
 type RootStackParamList = {
   TeacherLeaveRequest: {
@@ -420,6 +420,13 @@ const { fullTimetable, refreshNextClass } = useNextClass();
         nestedScrollEnabled
       >
         <View style={ui.container}>
+            <LinearGradient
+                                            pointerEvents="none"
+                                            colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                                            start={{ x: 0.05, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.dashboardTopGradient}
+                                          >
           <View style={ui.summaryGrid}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -436,7 +443,7 @@ const { fullTimetable, refreshNextClass } = useNextClass();
               </TeacherSummaryCard>
             ))}
           </View>
-
+</LinearGradient>
           <View style={ui.card}>
             <Text style={ui.sectionLabel}>Request type</Text>
             <View style={ui.segmentRow}>

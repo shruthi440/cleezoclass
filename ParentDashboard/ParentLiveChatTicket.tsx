@@ -341,7 +341,7 @@ const overallPercentage = () => {
 const ParentLiveChatTicket: React.FC<
   NativeStackScreenProps<RootStackParamList, 'ParentLiveChatTicket'>
   & { embedded?: boolean }
-> = ({ route, embedded = false }) => {
+> = ({ route, navigation, embedded = false }) => {
   const { themeStyles } = useContext(ThemeContext);
 const [studentData, setStudentData] = useState<any>(null);
   const { width, height } = useWindowDimensions();
@@ -394,6 +394,18 @@ useEffect(() => {
                 <Text style={{ marginTop: 8, fontSize: 14, color: '#444', lineHeight: 20 }}>
                   Start a conversation with the school from this dedicated page.
                 </Text>
+                <TouchableOpacity
+                  style={{
+                    marginTop: 16,
+                    borderRadius: 14,
+                    backgroundColor: '#6D2DE1',
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => navigation.navigate('ParentMessage', route.params)}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Open Messages</Text>
+                </TouchableOpacity>
               </View>
             </View>
        

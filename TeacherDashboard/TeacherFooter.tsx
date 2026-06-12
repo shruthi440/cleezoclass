@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 const logoImage = require('../assets/Cleezo.png');
 const backArrowImage = require('../assets/Arrow.png');
@@ -104,7 +105,7 @@ type TeacherFooterProps = {
 const TeacherFooter: React.FC<TeacherFooterProps> = ({
   addRoute = 'TeacherHomework',
   homeRoute = 'TeacherDashboard',
-  chatRoute = 'TeacherChatAndEvents',
+  chatRoute = 'TeacherMessage',
   profileRoute = 'TeacherDashboard',
 }) => {
   const navigation = useNavigation<any>();
@@ -152,8 +153,7 @@ const TeacherFooter: React.FC<TeacherFooterProps> = ({
           <Text style={styles.footerNavLabel}>Back</Text>
         </Pressable>
         <Pressable style={styles.footerNavItem} onPress={() => navigateTo(homeRoute)}>
-          <MaterialIcons name="home" size={22} color="#1F1F22" />
-          <Text style={styles.footerNavLabel}>Home</Text>
+<Ionicons name="home-outline" size={22} color="#1F1F22" />          <Text style={styles.footerNavLabel}>Home</Text>
         </Pressable>
         <Pressable
           style={styles.footerAddButton}

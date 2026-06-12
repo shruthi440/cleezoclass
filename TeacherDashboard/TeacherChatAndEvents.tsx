@@ -28,7 +28,7 @@ import TeacherSummaryCard from './TeacherSummaryCard';
 
 const BASE_URL = 'https://cleezoclass.com:4000';
 
-const TeacherChatAndEvents = ({ route }: any) => {
+const TeacherChatAndEvents = ({ route, navigation }: any) => {
   const routeParams = route?.params || {};
   const routeName = routeParams.name || '';
   const routeUsername = routeParams.username || '';
@@ -681,14 +681,23 @@ const endedChats = chatRequests.filter(
                   approvedChats
                     .filter(chat => chat.party2_student && chat.party1_name === (teacherName || teacherUsername))
                     .map(chat => (
-                      <View key={chat.id} style={ui.listItem}>
+                      <TouchableOpacity
+                        key={chat.id}
+                        style={ui.listItem}
+                        onPress={() =>
+                          navigation.navigate('TeacherMessage', {
+                            username: teacherUsername,
+                            name: teacherName,
+                          })
+                        }
+                      >
                         <Text style={ui.listItemMain} numberOfLines={1}>
                           {chat.party2_student || 'N/A'}
                         </Text>
                         <Text style={ui.listItemMeta}>
                           {chat.party2_class || 'N/A'} • {chat.party2_section || 'N/A'}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     ))
                 ) : (
                   <Text style={ui.emptyText}>No approved chats</Text>

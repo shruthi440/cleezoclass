@@ -43,6 +43,7 @@ import TeacherCounselling from './TeacherDashboard/Teacher_Councelling';
 import ScanPull from './TeacherDashboard/Scan&Pull';
 import TeacherModuleSummary from './TeacherDashboard/TeacherModuleSummary';
 import TeacherAnnouncements from './TeacherDashboard/TeacherAnnouncements';
+import TeacherMessage from './TeacherDashboard/teacher_msg';
 import ParentDashboard from './ParentDashboard/ParentDashboard';
 import ParentAcademic from './ParentDashboard/ParentAcademic';
 import ParentAttendance from './ParentDashboard/ParentAttendance';
@@ -54,6 +55,7 @@ import ParentPhotos from './ParentDashboard/ParentPhotos';
 import ParentLiveChatTicket from './ParentDashboard/ParentLiveChatTicket';
 import ParentHomepage from './ParentDashboard/parentEvents';
 import ParentAnnouncements from './ParentDashboard/ParentAnnouncements';
+import ParentMessage from './ParentDashboard/parent_msg';
 import AdminDashboard from './AdminDashboard';
 import ChiefDashboard from './chiefdashboard/ChiefDashboard';
 import AcademicStudent from './chiefdashboard/Chief_operation_AcademicStudent';
@@ -108,6 +110,7 @@ type RootStackParamList = {
   TeacherQuestionPaperGeneration: { username?: string; name?: string } | undefined;
   TeacherLeaveRequest: { username?: string; name?: string } | undefined;
   TeacherChatAndEvents: { username?: string; name?: string } | undefined;
+  TeacherMessage: { username?: string; name?: string } | undefined;
   TeacherCounselling: { username?: string; name?: string } | undefined;
   TeacherAnnouncements: { username?: string; name?: string } | undefined;
   ScanPull: undefined;
@@ -121,6 +124,7 @@ type RootStackParamList = {
   ParentCalender: { username?: string; name?: string } | undefined;
   ParentPhotos: { username?: string; name?: string } | undefined;
   ParentLiveChatTicket: { username?: string; name?: string } | undefined;
+  ParentMessage: { username?: string; name?: string } | undefined;
   ParentHomepage: { username?: string; name?: string } | undefined;
   ParentAnnouncements: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;
@@ -346,6 +350,7 @@ const App = () => {
                     name="ParentLiveChatTicket"
                     component={ParentLiveChatTicket as React.ComponentType<any>}
                   />
+                  <Stack.Screen name="ParentMessage" component={ParentMessage} />
                   <Stack.Screen
                     name="ParentHomepage"
                     component={ParentHomepage as React.ComponentType<any>}
@@ -406,6 +411,7 @@ const App = () => {
                     name="TeacherChatAndEvents"
                     component={TeacherChatAndEvents as React.ComponentType<any>}
                   />
+                  <Stack.Screen name="TeacherMessage" component={TeacherMessage} />
                   <Stack.Screen
                     name="TeacherCounselling"
                     component={TeacherCounselling as React.ComponentType<any>}

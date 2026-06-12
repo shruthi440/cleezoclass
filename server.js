@@ -100,28 +100,26 @@ function sanitizeDbName(schoolName) {
   }
 
   return schoolName
-    .toUpperCase()
+    .trim()
     .replace(/\s+/g, '_')
-    .replace(/[^A-Z0-9_]/g, '')
+    .replace(/[^a-zA-Z0-9_]/g, '')
     .replace(/_+/g, '_')
     .replace(/(^_|_$)/g, '');
 }
-
 function getDynamicDbConnection(schoolName) {
   if (!schoolName) {
     throw new Error('schoolName not provided to DB connection');
   }
 
-  const dbName = sanitizeDbName(schoolName);
+  console.log("Connecting to database:", schoolName);
 
   return mysql.createConnection({
     host: '162.215.210.38',
     user: 'root',
     password: 'NavyAtagsoLnovA@$000',
-    database: dbName,
+    database: schoolName,
   });
 }
-
 
 
 

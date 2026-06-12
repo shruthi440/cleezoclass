@@ -21,7 +21,7 @@ import TeacherTimetableComponent from '../TeacherTimetableComponent';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
 import TeacherFooter from './TeacherFooter';
 import TeacherSummaryCard from './TeacherSummaryCard';
-
+import LinearGradient from 'react-native-linear-gradient';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const scaleFont = (size: number) => (SCREEN_WIDTH / 375) * size;
@@ -671,6 +671,14 @@ const summaryCards = [
         nestedScrollEnabled
       >
     <View style={styles.container}>
+
+                    <LinearGradient
+                        pointerEvents="none"
+                        colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                        start={{ x: 0.05, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.dashboardTopGradient}
+                      >
       <View style={local.summaryRow}>
         {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -693,7 +701,7 @@ const summaryCards = [
               </TeacherSummaryCard>
             ))}
           </View>
-
+</LinearGradient>
       <View style={styles.syllabusContainerCalenders}>
         <ScrollView
           style={local.cardScroll}

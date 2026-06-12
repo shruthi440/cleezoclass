@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -10,17 +10,40 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import LinearGradient from 'react-native-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-
-import { ErrorContext } from '../ErrorContext';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import ParentFooter from './ParentFooter';
+import { createAppStyles } from '../App.styles';
+import { ErrorContext } from '../ErrorContext';
 import { RootStackParamList } from '../types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ParentFees'>;
 type FeesViewProps = Props & { embedded?: boolean };
+
+type FeeRow = {
+  key: string;
+  label: string;
+  amount: number;
+  paid: number;
+  discount: number;
+  due: number;
+  paymentDate?: string;
+};
+
+type DynamicFeeType = {
+  id?: number | string;
+  feeName?: string;
+  feesType?: string;
+  scope?: string;
+  frequency?: string;
+  installments?: number;
+  columnBase?: string;
+};
 
 const logoImage: ImageSourcePropType = require('../assets/Cleezo.png');
 
@@ -29,143 +52,18 @@ const formatINR = (value: number) =>
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 2,
-  }).format(value);
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
 
 const toNumber = (value: any) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const formatFeeLabel = (key: string) =>
-  key
-    .replace(/[_-]+/g, ' ')
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .replace(/\bFees\b/g, 'Fee')
-    .trim();
-
-const RESERVED_FEE_KEYS = new Set([
-  'id',
-  'studentId',
-  'student_id',
-  'username',
-  'name',
-  'class_name',
-  'section',
-  'schoolCode',
-  'FeeClass',
-  'FeeSection',
-  'Class_name',
-  'StudentName',
-  'CompleteFee',
-  'Final_Amount',
-  'Paid_Amount',
-  'Discount',
-  'Admission_paid',
-  'books_paid',
-  'uniform_paid',
-  'bus_paid',
-  'exam_paid',
-  'others_paid',
-  'Admission_Discount',
-  'books_discount',
-  'uniform_discount',
-  'bus_discount',
-  'exam_discount',
-  'others_discount',
-  'ResidentialCompleteFee',
-  'feeDetails',
-  'feeDetail',
-  'login_id',
-  'receiptNumber',
-  'paidDate',
-  'paymentMode',
-  'transaction_id',
-  'status',
-  'remarks',
-  'discount_reason',
-  'Discount_Approved_By',
-  'discount_Approved_By',
-  'Discount_Date',
-  'Discount_RefNo',
-  'Discount_Referred_By',
-  'marks_obtained',
-  'rank',
-  'grade',
-  'frequency_type',
-  'amount_paid',
-  'previous_fee_due',
-  'previous_paid',
-  'UploadFeeDetails',
-  'UpdatedCompleteFee',
-  'createdAt',
-  'updatedAt',
-]);
-
-const isFeeMetadataKey = (key: string) =>
-  [
-    /^login_id$/i,
-    /^receiptNumber$/i,
-    /^paidDate$/i,
-    /^paymentMode$/i,
-    /^transaction_id$/i,
-    /^status$/i,
-    /^remarks$/i,
-    /^discount_reason$/i,
-    /^discount_approved_by$/i,
-    /^discount_date$/i,
-    /^discount_refno$/i,
-    /^discount_referred_by$/i,
-    /^marks_obtained$/i,
-    /^rank$/i,
-    /^grade$/i,
-    /^frequency_type$/i,
-    /^amount_paid$/i,
-    /^previous_fee_due$/i,
-    /^previous_paid$/i,
-    /^uploadfeedetails$/i,
-    /^updatedcompletefee$/i,
-  ].some((pattern) => pattern.test(key));
-
-const getFirstNumericValue = (source: Record<string, any>, keys: string[]) => {
-  for (const key of keys) {
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      const value = toNumber(source[key]);
-      if (value || source[key] === 0) return value;
-    }
-  }
-  return 0;
-};
-
-const mergeFeeData = (
-  classFeeData: Record<string, any> | null,
-  studentFeeData: Record<string, any> | null
-) => {
-  const merged: Record<string, any> = { ...(classFeeData || {}) };
-
-  Object.entries(studentFeeData || {}).forEach(([key, studentValue]) => {
-    const classValue = merged[key];
-
-    if (studentValue === null || studentValue === undefined || studentValue === '') {
-      return;
-    }
-
-    const studentLooksNumeric =
-      typeof studentValue === 'number' ||
-      (typeof studentValue === 'string' && studentValue.trim() !== '' && !Number.isNaN(Number(studentValue)));
-
-    if (studentLooksNumeric) {
-      const studentAmount = toNumber(studentValue);
-      const classAmount = toNumber(classValue);
-      if (studentAmount === 0 && classAmount > 0) {
-        return;
-      }
-    }
-
-    merged[key] = studentValue;
-  });
-
-  return merged;
 };
 
 const normalizeFeeKey = (value: string) =>
@@ -176,425 +74,165 @@ const normalizeFeeKey = (value: string) =>
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
 
-const buildFeeRowsFromSummary = (
-  source: Record<string, any> | null,
-  dynamicFeeTypes: Array<Record<string, any>> = []
-) => {
-  if (!source) return [];
+const formatFeeLabel = (key: string) =>
+  String(key || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\bFees\b/g, 'Fee')
+    .trim();
 
-  const feeConfigs = [
-    {
-      label: 'Class Fee',
-      totalKeys: ['CompleteFee', 'complete_fee', 'UpdatedCompleteFee', 'updatedCompleteFee'],
-      paidKeys: ['Paid_Amount', 'paid_amount', 'Total_Paid', 'totalPaid'],
-      discountKeys: ['Discount', 'feeDiscount', 'fee_discount'],
-    },
-    {
-      label: 'Tuition Fee',
-      totalKeys: ['completeFee', 'complete_fee', 'Final_Amount', 'final_amount'],
-      paidKeys: ['paidAmount', 'Paid_Amount', 'paid_amount'],
-      discountKeys: ['tuitionDiscount', 'tuition_discount'],
-    },
-    {
-      label: 'Admission Fee',
-      totalKeys: ['admissionFee', 'Admission_fees', 'Admission_Fees'],
-      paidKeys: ['admissionPaid', 'Admission_paid', 'admission_paid'],
-      discountKeys: ['admissionDiscount', 'Admission_Discount', 'admission_discount'],
-    },
-    {
-      label: 'Books Fee',
-      totalKeys: ['bookFee', 'Book_Fees', 'Books_Fees', 'book_fees'],
-      paidKeys: ['bookPaid', 'books_paid', 'book_paid'],
-      discountKeys: ['bookDiscount', 'books_discount', 'Book_Discount', 'book_discount'],
-    },
-    {
-      label: 'Uniform Fee',
-      totalKeys: ['uniformFee', 'Uniform_fees', 'uniform_fees'],
-      paidKeys: ['uniformPaid', 'uniform_paid'],
-      discountKeys: ['uniformDiscount', 'uniform_discount', 'Uniform_Discount'],
-    },
-    {
-      label: 'Bus Fee',
-      totalKeys: ['busFee', 'Bus_fees', 'Bus_Fees', 'transport', 'transport_fee'],
-      paidKeys: ['busPaid', 'bus_paid', 'transport_paid'],
-      discountKeys: ['busDiscount', 'bus_discount', 'transport_discount'],
-    },
-    {
-      label: 'Exam Fee',
-      totalKeys: ['examFee', 'Exam_fees', 'Exam_Fees', 'exam_fees'],
-      paidKeys: ['examPaid', 'exam_paid'],
-      discountKeys: ['examDiscount', 'exam_discount'],
-    },
-    {
-      label: 'Other Fee',
-      totalKeys: ['othersFee', 'Others', 'otherFee', 'other_fee'],
-      paidKeys: ['othersPaid', 'others_paid', 'other_paid'],
-      discountKeys: ['othersDiscount', 'others_discount', 'other_discount'],
-    },
-    {
-      label: 'Library',
-      totalKeys: ['library', 'libraryFee', 'library_fee'],
-      paidKeys: ['libraryPaid', 'library_paid'],
-      discountKeys: ['libraryDiscount', 'library_discount'],
-    },
-    {
-      label: 'Stationary',
-      totalKeys: ['stationary', 'stationery', 'stationaryFee', 'stationeryFee'],
-      paidKeys: ['stationaryPaid', 'stationary_paid', 'stationery_paid'],
-      discountKeys: ['stationaryDiscount', 'stationary_discount', 'stationery_discount'],
-    },
-    {
-      label: 'Guides',
-      totalKeys: ['guides', 'guide', 'guidesFee', 'guide_fee'],
-      paidKeys: ['guidesPaid', 'guides_paid', 'guide_paid'],
-      discountKeys: ['guidesDiscount', 'guides_discount', 'guide_discount'],
-    },
-    {
-      label: 'Belt',
-      totalKeys: ['belt', 'belt_fee', 'beltFee'],
-      paidKeys: ['beltPaid', 'belt_paid', 'belt_fee_paid'],
-      discountKeys: ['beltDiscount', 'belt_discount', 'belt_fee_discount'],
-    },
-    {
-      label: 'Tie',
-      totalKeys: ['tie', 'tie_fee', 'tieFee'],
-      paidKeys: ['tieFeePaid', 'tie_fee_paid', 'tie_paid'],
-      discountKeys: ['tieDiscount', 'tie_discount', 'tie_fee_discount'],
-    },
-    {
-      label: 'Sports',
-      totalKeys: ['sports', 'sport', 'sportsFee', 'sport_fee'],
-      paidKeys: ['sportsPaid', 'sports_paid', 'sport_paid'],
-      discountKeys: ['sportsDiscount', 'sports_discount', 'sport_discount'],
-    },
-    {
-      label: 'Saving',
-      totalKeys: ['Saving_Fees', 'saving_fees', 'Savings_Fees'],
-      paidKeys: ['Saving_paid', 'saving_paid', 'Savings_paid'],
-      discountKeys: ['Saving_Discount', 'saving_discount', 'Savings_discount'],
-    },
-    {
-      label: 'Residential Fee',
-      totalKeys: ['ResidentialCompleteFee', 'residentialFee', 'residential_fee'],
-      paidKeys: ['residentialPaid', 'ResidentialPaid', 'residential_paid'],
-      discountKeys: ['ResidentialDiscount', 'residential_discount'],
-    },
-  ];
+const buildFeeKeyVariants = (value: string) => {
+  const normalized = normalizeFeeKey(value);
+  const variants = new Set<string>();
+  if (!normalized) return [];
 
-  const rowMap = new Map<string, any>();
-  const sourceEntries = Object.entries(source).map(([key, value]) => [normalizeFeeKey(key), value] as const);
-  const sourceKeys = new Set(sourceEntries.map(([key]) => key));
+  variants.add(normalized);
+  variants.add(normalized.replace(/_fee(s)?$/, ''));
+  variants.add(normalized.replace(/_amount$/, ''));
 
-  const findFirstValue = (keys: string[]) => {
+  if (normalized.endsWith('s')) {
+    variants.add(normalized.slice(0, -1));
+  } else {
+    variants.add(`${normalized}s`);
+  }
+
+  if (normalized.endsWith('ies')) {
+    variants.add(normalized.replace(/ies$/, 'y'));
+  }
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const mergeFeeData = (classFeeData: Record<string, any> | null, studentFeeData: Record<string, any> | null) => {
+  const merged: Record<string, any> = { ...(classFeeData || {}) };
+
+  Object.entries(studentFeeData || {}).forEach(([key, studentValue]) => {
+    if (studentValue === null || studentValue === undefined || studentValue === '') return;
+
+    const classValue = merged[key];
+    const studentLooksNumeric =
+      typeof studentValue === 'number' ||
+      (typeof studentValue === 'string' && studentValue.trim() !== '' && !Number.isNaN(Number(studentValue)));
+
+    if (studentLooksNumeric) {
+      const studentAmount = toNumber(studentValue);
+      const classAmount = toNumber(classValue);
+      if (studentAmount === 0 && classAmount > 0) return;
+    }
+
+    merged[key] = studentValue;
+  });
+
+  return merged;
+};
+
+const isStudentScopedFee = (scope?: string) =>
+  /student|individual|personal|per\s*student/i.test(String(scope || ''));
+
+const isClassScopedFee = (scope?: string) =>
+  /class|section|batch|group/i.test(String(scope || ''));
+
+const buildRowsFromSource = (
+  paymentSource: Record<string, any> | null,
+  amountSource: Record<string, any> | null,
+  dynamicFeeTypes: DynamicFeeType[] = [],
+  feeBreakdown: Array<Record<string, any>> = []
+): FeeRow[] => {
+  if (!paymentSource && !amountSource) return [];
+
+  const paymentEntries = Object.entries(paymentSource || {}).map(([key, value]) => [normalizeFeeKey(key), value] as const);
+  const amountEntries = Object.entries(amountSource || {}).map(([key, value]) => [normalizeFeeKey(key), value] as const);
+  const paymentLookup = new Map<string, any>(paymentEntries);
+  const amountLookup = new Map<string, any>(amountEntries);
+
+  const exactLookup = (keys: string[], lookups: Array<Map<string, any>>) => {
     for (const key of keys) {
-      const normalizedKey = normalizeFeeKey(key);
-      const matched = sourceEntries.find(([candidate]) => candidate === normalizedKey);
-      if (matched) {
-        const numeric = toNumber(matched[1]);
-        if (Number.isFinite(numeric)) return numeric;
+      const variants = buildFeeKeyVariants(key);
+      for (const sourceLookup of lookups) {
+        for (const variant of variants) {
+          if (!sourceLookup.has(variant)) continue;
+          const numeric = toNumber(sourceLookup.get(variant));
+          if (numeric || sourceLookup.get(variant) === 0) return numeric;
+        }
       }
     }
     return 0;
   };
 
-  const dynamicFeeNames = new Set<string>();
-  (dynamicFeeTypes || []).forEach((fee) => {
-    const label = String(fee?.feeName || fee?.feesType || fee?.label || '').trim();
-    const normalized = normalizeFeeKey(fee?.columnBase || label);
-    if (normalized) dynamicFeeNames.add(normalized);
-    if (label) dynamicFeeNames.add(normalizeFeeKey(label));
-  });
+  const findFirstValue = (keys: string[], lookups: Array<Map<string, any>> = [paymentLookup, amountLookup]) =>
+    exactLookup(keys, lookups);
 
-  const coveredKeys = new Set(
-    feeConfigs.flatMap((config) => [
-      ...config.totalKeys.map((key) => normalizeFeeKey(key)),
-      ...config.paidKeys.map((key) => normalizeFeeKey(key)),
-      ...config.discountKeys.map((key) => normalizeFeeKey(key)),
-      normalizeFeeKey(config.label),
-    ])
-  );
+  const findBestAmountValue = (keys: string[], lookups: Array<Map<string, any>> = [amountLookup, paymentLookup]) =>
+    exactLookup(keys, lookups);
 
-  const pushRow = (label: string, total: number, paid: number, discount: number) => {
-    const due = Math.max(total - paid - discount, 0);
-    if (total <= 0 && paid <= 0 && discount <= 0 && due <= 0) return;
-    rowMap.set(normalizeFeeKey(label), {
+  const rows: FeeRow[] = [];
+  const seen = new Set<string>();
+
+  const addRow = (label: string, amount: number, paid: number, discount: number) => {
+    const due = Math.max(amount - paid - discount, 0);
+    const key = normalizeFeeKey(label);
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push({
       key: label,
       label,
-      amount: total,
+      amount,
       paid,
       discount,
       due,
+      paymentDate: '-',
     });
   };
 
-  feeConfigs.forEach((config) => {
-    const total = findFirstValue(config.totalKeys);
-    const paid = findFirstValue(config.paidKeys);
-    const discount = findFirstValue(config.discountKeys);
-
-    if (total <= 0 && paid <= 0 && discount <= 0) {
-      return;
-    }
-
-    pushRow(config.label, total, paid, discount);
+  const dynamicTypesByBase = new Map<string, DynamicFeeType>();
+  dynamicFeeTypes.forEach((item) => {
+    const label = String(item?.feeName || item?.feesType || '').trim();
+    const base = normalizeFeeKey(item?.columnBase || label);
+    if (base) dynamicTypesByBase.set(base, item);
   });
 
-  Object.entries(source).forEach(([rawKey, rawValue]) => {
-    const normalizedKey = normalizeFeeKey(rawKey);
-    if (!normalizedKey) return;
-    if (coveredKeys.has(normalizedKey)) return;
-    if (
-      normalizedKey === 'id' ||
-      normalizedKey === 'student_id' ||
-      normalizedKey === 'username' ||
-      normalizedKey === 'name' ||
-      normalizedKey === 'class_name' ||
-      normalizedKey === 'classname' ||
-      normalizedKey === 'section' ||
-      normalizedKey === 'schoolcode' ||
-      normalizedKey.endsWith('_paid') ||
-      normalizedKey.endsWith('_due') ||
-      normalizedKey.endsWith('_discount') ||
-      normalizedKey.startsWith('total_') ||
-      normalizedKey.startsWith('dynamicfee')
-    ) {
-      return;
-    }
-
-    const amount = toNumber(rawValue);
-    const isDynamicFee = dynamicFeeNames.has(normalizedKey);
-    const shouldInclude = amount > 0 || isDynamicFee;
-    if (!shouldInclude) return;
-
-    const paid = findFirstValue([
-      `${rawKey}_paid`,
-      `${rawKey}_Paid`,
-      `${normalizedKey}_paid`,
-      `${normalizedKey}_Paid`,
-    ]);
-    const discount = findFirstValue([
-      `${rawKey}_discount`,
-      `${rawKey}_Discount`,
-      `${normalizedKey}_discount`,
-      `${normalizedKey}_Discount`,
-    ]);
-
-    pushRow(formatFeeLabel(rawKey), amount, paid, discount);
-  });
-
-  return Array.from(rowMap.values());
-};
-
-const buildFeeRowsFromBackend = (payment: Record<string, any> | null) => {
-  const breakdown = Array.isArray(payment?.feeBreakdown) ? payment.feeBreakdown : [];
-  console.log('[ParentFees] backend feeBreakdown raw:', breakdown);
-  return breakdown
-    .map((row: any, index: number) => ({
-      key: String(row?.label || row?.key || `fee-${index}`),
-      label: String(row?.label || row?.key || `Fee ${index + 1}`),
-      amount: toNumber(row?.total ?? row?.amount),
-      paid: toNumber(row?.paid),
-      discount: toNumber(row?.discount),
-      due: toNumber(row?.due),
-    }))
-    .filter((row) => {
-      const keep = row.amount > 0 || row.paid > 0 || row.discount > 0 || row.due > 0;
-      if (!keep) {
-        console.log('[ParentFees] backend fee row filtered out:', row);
-      } else {
-        console.log('[ParentFees] backend fee row kept:', row);
+  dynamicTypesByBase.forEach((item, base) => {
+    const label = String(item?.feeName || item?.feesType || base).trim();
+    const scope = String(item?.scope || '').trim();
+    const amountLookups = isStudentScopedFee(scope)
+      ? [paymentLookup, amountLookup]
+      : isClassScopedFee(scope)
+      ? [amountLookup, paymentLookup]
+      : [amountLookup, paymentLookup];
+    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label], amountLookups);
+    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`], [paymentLookup, amountLookup]);
+    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`], [paymentLookup, amountLookup]);
+    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`], [paymentLookup, amountLookup]);
+    const finalLabel = formatFeeLabel(label || base);
+    addRow(finalLabel, amount, paid, discount);
+    if (seen.has(normalizeFeeKey(finalLabel))) {
+      const existing = rows.find((row) => normalizeFeeKey(row.label) === normalizeFeeKey(finalLabel));
+      if (existing) {
+        if (existing.amount > 0) {
+          existing.due = Math.max(existing.amount - existing.paid - existing.discount, 0);
+        } else if (due > 0) {
+          existing.amount = Math.max(existing.amount, existing.paid + existing.discount + due);
+          existing.due = due;
+        }
       }
-      return keep;
-    });
-};
-
-const mergeFeeRows = (
-  primaryRows: Array<{
-    key: string;
-    label: string;
-    amount: number;
-    paid: number;
-    discount: number;
-    due: number;
-  }>,
-  fallbackRows: Array<{
-    key: string;
-    label: string;
-    amount: number;
-    paid: number;
-    discount: number;
-    due: number;
-  }>
-) => {
-  const merged = new Map<string, (typeof primaryRows)[number]>();
-
-  fallbackRows.forEach((row) => {
-    merged.set(normalizeFeeKey(row.label || row.key), row);
-  });
-
-  primaryRows.forEach((row) => {
-    const normalizedKey = normalizeFeeKey(row.label || row.key);
-    const existing = merged.get(normalizedKey);
-    if (!existing) {
-      merged.set(normalizedKey, row);
-      return;
     }
-
-    merged.set(normalizedKey, {
-      ...existing,
-      ...row,
-      amount: row.amount || existing.amount,
-      paid: row.paid || existing.paid,
-      discount: row.discount || existing.discount,
-      due: row.due || existing.due,
-    });
-  });
-
-  return Array.from(merged.values());
-};
-
-const buildDynamicFeeRows = (feeData: Record<string, any> | null) => {
-  if (!feeData) return [];
-
-  const rows: Array<{
-    key: string;
-    label: string;
-    amount: number;
-    paid: number;
-    discount: number;
-    due: number;
-  }> = [];
-  const consumedKeys = new Set<string>();
-
-  const addRow = (config: {
-    key: string;
-    label: string;
-    amountKeys: string[];
-    paidKeys: string[];
-    discountKeys: string[];
-  }) => {
-    const amount = getFirstNumericValue(feeData, [config.key, ...config.amountKeys]);
-    if (amount <= 0) return;
-
-    const paid = getFirstNumericValue(feeData, config.paidKeys);
-    const discount = getFirstNumericValue(feeData, config.discountKeys);
-
-    rows.push({
-      key: config.key,
-      label: config.label,
-      amount,
-      paid,
-      discount,
-      due: Math.max(amount - paid - discount, 0),
-    });
-
-    [config.key, ...config.amountKeys, ...config.paidKeys, ...config.discountKeys].forEach((key) =>
-      consumedKeys.add(key)
-    );
-  };
-
-  addRow({
-    key: 'Tuition_Fee',
-    label: 'Tuition Fee',
-    amountKeys: ['Tuition_Fee', 'Calculated_Tuition_Fee', 'CompleteFee', 'Final_Amount'],
-    paidKeys: ['Paid_Amount'],
-    discountKeys: ['Discount'],
-  });
-  addRow({
-    key: 'Admission_fees',
-    label: 'Admission Fee',
-    amountKeys: ['Admission_fees'],
-    paidKeys: ['Admission_paid'],
-    discountKeys: ['Admission_Discount'],
-  });
-  addRow({
-    key: 'Book_Fees',
-    label: 'Books Fee',
-    amountKeys: ['Book_Fees', 'Books_Fees'],
-    paidKeys: ['books_paid'],
-    discountKeys: ['books_discount', 'Book_Discount'],
-  });
-  addRow({
-    key: 'Uniform_fees',
-    label: 'Uniform Fee',
-    amountKeys: ['Uniform_fees'],
-    paidKeys: ['uniform_paid'],
-    discountKeys: ['uniform_discount', 'Uniform_Discount'],
-  });
-  addRow({
-    key: 'Bus_fees',
-    label: 'Bus Fee',
-    amountKeys: ['Bus_fees'],
-    paidKeys: ['bus_paid'],
-    discountKeys: ['bus_discount', 'Bus_Discount'],
-  });
-  addRow({
-    key: 'Exam_fees',
-    label: 'Exam Fee',
-    amountKeys: ['Exam_fees'],
-    paidKeys: ['exam_paid'],
-    discountKeys: ['exam_discount', 'Exam_Discount'],
-  });
-  addRow({
-    key: 'Others',
-    label: 'Other Fee',
-    amountKeys: ['Others'],
-    paidKeys: ['others_paid'],
-    discountKeys: ['others_discount', 'Others_Discount'],
-  });
-  addRow({
-    key: 'Saving_Fees',
-    label: 'Saving Fee',
-    amountKeys: ['Saving_Fees'],
-    paidKeys: ['Saving_paid'],
-    discountKeys: ['Saving_discount', 'Saving_Discount'],
-  });
-  addRow({
-    key: 'ResidentialCompleteFee',
-    label: 'Residential Fee',
-    amountKeys: ['ResidentialCompleteFee'],
-    paidKeys: ['ResidentialPaid', 'residentialPaid'],
-    discountKeys: ['ResidentialDiscount'],
-  });
-
-  Object.keys(feeData).forEach((key) => {
-    if (consumedKeys.has(key) || RESERVED_FEE_KEYS.has(key) || isFeeMetadataKey(key)) return;
-    if (/_paid$|_due$|_discount$/i.test(key)) return;
-
-    const amount = toNumber(feeData[key]);
-    if (amount <= 0) return;
-
-    const paid = getFirstNumericValue(feeData, [
-      `${key}_paid`,
-      `${key}_Paid`,
-      `${key.replace(/fees?/i, '')}_paid`,
-      `${key.replace(/fees?/i, '')}Paid`,
-    ]);
-    const discount = getFirstNumericValue(feeData, [
-      `${key}_discount`,
-      `${key}_Discount`,
-      `${key.replace(/fees?/i, '')}_discount`,
-      `${key.replace(/fees?/i, '')}Discount`,
-    ]);
-    rows.push({
-      key,
-      label: formatFeeLabel(key),
-      amount,
-      paid,
-      discount,
-      due: Math.max(amount - paid - discount, 0),
-    });
   });
 
   return rows;
 };
 
 const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) => {
+  const { height, width } = useWindowDimensions();
+  const appStyles = useMemo(
+    () => createAppStyles({ phoneWidth: width, phoneHeight: height }),
+    [height, width],
+  );
   const [studentData, setStudentData] = useState<Record<string, any> | null>(null);
-  const [fees, setFees] = useState<Record<string, any> | null>(null);
+  const [classFeeSource, setClassFeeSource] = useState<Record<string, any> | null>(null);
   const [paymentDetails, setPaymentDetails] = useState<Record<string, any> | null>(null);
-  const [dynamicFeeTypes, setDynamicFeeTypes] = useState<Array<Record<string, any>>>([]);
-  const [activeTab, setActiveTab] = useState<'studentData' | 'transactions'>('studentData');
+  const [feeApiSummary, setFeeApiSummary] = useState<Record<string, any> | null>(null);
+  const [dynamicFeeTypes, setDynamicFeeTypes] = useState<DynamicFeeType[]>([]);
   const [loading, setLoading] = useState(true);
   const { showError } = React.useContext(ErrorContext);
 
@@ -607,10 +245,8 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
         stores.forEach(([key, value]) => {
           if (value) data[key] = value;
         });
-        console.log('[ParentFees] AsyncStorage student data:', data);
         setStudentData(data);
       } catch {
-        console.log('[ParentFees] Failed to load student data from AsyncStorage');
         showError('Data Error', 'Failed to load student information.');
       }
     };
@@ -619,7 +255,7 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
   }, [showError]);
 
   useEffect(() => {
-    let active = true;  
+    let active = true;
 
     const fetchDynamicFeeTypes = async () => {
       try {
@@ -662,14 +298,11 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
     const fetchFees = async () => {
       try {
         if (!studentData?.class_name || !studentData?.section || !studentData?.schoolCode) return;
-        console.log('[ParentFees] fetchFees studentData:', studentData);
-        const [studentFeeRes, classRes, studentRes] = await Promise.allSettled([
-          axios.get(
-            `https://cleezoclass.com:4000/api/fees/${encodeURIComponent(String(studentData.username || ''))}`,
-            {
-              params: { schoolCode: studentData.schoolCode },
-            }
-          ),
+
+        const [feeApiRes, classRes, studentRes, paymentRes, dynamicRowsRes, feeStructureRes] = await Promise.allSettled([
+          axios.get(`https://cleezoclass.com:4000/api/fees/${encodeURIComponent(String(studentData.username || ''))}`, {
+            params: { schoolCode: studentData.schoolCode },
+          }),
           axios.get('https://cleezoclass.com:4000/api/feeDetailsByClassSection', {
             params: {
               className: studentData.class_name,
@@ -681,62 +314,142 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
             studentId: studentData.studentId,
             schoolCode: studentData.schoolCode,
           }),
+          axios.get(`https://cleezoclass.com:4000/api/payment/${studentData.studentId}?schoolCode=${studentData.schoolCode}`),
+          axios.get('https://cleezoclass.com:4000/api/student-transactions-dynamic', {
+            params: {
+              schoolCode: studentData.schoolCode,
+              studentName: studentData.name || studentData.username || '',
+              className: studentData.class_name,
+              section: studentData.section,
+              includeUnpaid: 1,
+            },
+          }),
+          axios.get(`https://cleezoclass.com:4000/feeStructure/${encodeURIComponent(String(studentData.class_name || ''))}`, {
+            params: {
+              schoolCode: studentData.schoolCode,
+              section: studentData.section,
+            },
+          }),
         ]);
 
         if (!active) return;
 
-        const studentFeePayload = studentFeeRes.status === 'fulfilled' ? studentFeeRes.value.data?.data || {} : {};
+        const feeApiPayload = feeApiRes.status === 'fulfilled' ? feeApiRes.value.data?.data || {} : {};
         const classFeeData = classRes.status === 'fulfilled' ? classRes.value.data?.feeDetail || {} : {};
         const studentFeeData = studentRes.status === 'fulfilled' ? studentRes.value.data?.feeDetails || {} : {};
+        const paymentPayload = paymentRes.status === 'fulfilled' ? paymentRes.value.data?.payments || {} : {};
+        const feeStructureData =
+          feeStructureRes.status === 'fulfilled'
+            ? feeStructureRes.value.data?.feeStructure || feeStructureRes.value.data?.feeDetail || {}
+            : {};
+        const fallbackClassFeeData =
+          classRes.status === 'fulfilled'
+            ? classRes.value.data?.feeDetail || classRes.value.data?.feeStructure || {}
+            : {};
+        const apiRows = dynamicRowsRes.status === 'fulfilled' && Array.isArray(dynamicRowsRes.value.data)
+          ? dynamicRowsRes.value.data
+          : [];
 
-        console.log('[ParentFees] studentFeeRes status:', studentFeeRes.status);
-        console.log('[ParentFees] classRes status:', classRes.status);
-        console.log('[ParentFees] studentRes status:', studentRes.status);
-        console.log('[ParentFees] studentFeePayload:', studentFeePayload);
-        console.log('[ParentFees] classFeeData:', classFeeData);
-        console.log('[ParentFees] studentFeeData:', studentFeeData);
+        console.log('[ParentFees] API response bodies:', {
+          feeApiRes: feeApiRes.status === 'fulfilled' ? feeApiRes.value.data : feeApiRes.reason,
+          classRes: classRes.status === 'fulfilled' ? classRes.value.data : classRes.reason,
+          studentRes: studentRes.status === 'fulfilled' ? studentRes.value.data : studentRes.reason,
+          paymentRes: paymentRes.status === 'fulfilled' ? paymentRes.value.data : paymentRes.reason,
+          dynamicRowsRes: dynamicRowsRes.status === 'fulfilled' ? dynamicRowsRes.value.data : dynamicRowsRes.reason,
+          feeStructureRes: feeStructureRes.status === 'fulfilled' ? feeStructureRes.value.data : feeStructureRes.reason,
+        });
+
+        console.log('[ParentFees] feeApiPayload keys:', Object.keys(feeApiPayload || {}));
+        console.log('[ParentFees] classFeeData keys:', Object.keys(classFeeData || {}));
+        console.log('[ParentFees] studentFeeData keys:', Object.keys(studentFeeData || {}));
+        console.log('[ParentFees] paymentPayload keys:', Object.keys(paymentPayload || {}));
+        console.log('[ParentFees] dynamicRowsRes status:', dynamicRowsRes.status);
+        console.log('[ParentFees] dynamicRows count:', apiRows.length);
+        console.log('[ParentFees] dynamicRows sample:', apiRows.slice(0, 5).map((row) => ({
+          id: row?.id,
+          studentName: row?.StudentName || row?.studentName || row?.name,
+          className: row?.Class_name || row?.class_name || row?.className,
+          section: row?.Section || row?.section || row?.sectionName,
+          feeType: row?.fee_type || row?.feeType || row?.FeeType || row?.feeName,
+          totalAmount: row?.CompleteFee || row?.completeFee || row?.Final_Amount || row?.Total_Amount || row?.totalAmount,
+          paidAmount: row?.Paid_Amount || row?.paid_amount || row?.paidAmount,
+          dueAmount: row?.Due_Amount || row?.Total_Due || row?.dueAmount,
+        })));
 
         const routeFeeData = {
-          ...(studentFeePayload || {}),
-          ...(studentFeePayload?.studentFeeDetails || {}),
+          ...(feeApiPayload || {}),
+          ...(feeApiPayload?.studentFeeDetails || {}),
         };
+
         const mergedFeeData = {
           ...mergeFeeData(classFeeData, studentFeeData),
           ...routeFeeData,
+          ...(paymentPayload || {}),
+          ...(paymentPayload?.discounts || {}),
         };
 
-        setFees(mergedFeeData);
+        console.log('[ParentFees] fee fetch raw payloads:', {
+          feeApiPayloadKeys: Object.keys(feeApiPayload || {}),
+          classFeeDataKeys: Object.keys(classFeeData || {}),
+          studentFeeDataKeys: Object.keys(studentFeeData || {}),
+          paymentPayloadKeys: Object.keys(paymentPayload || {}),
+          feeStructureDataKeys: Object.keys(feeStructureData || {}),
+          fallbackClassFeeDataKeys: Object.keys(fallbackClassFeeData || {}),
+          mergedFeeDataKeys: Object.keys(mergedFeeData || {}),
+        });
+        console.log('[ParentFees] fee fetch important values:', {
+          studentName: studentData.name,
+          className: studentData.class_name,
+          section: studentData.section,
+          schoolCode: studentData.schoolCode,
+          studentId: studentData.studentId,
+          routeFeeData,
+        });
+        console.log('[ParentFees] fee api summary payload:', feeApiPayload);
+        console.log('[ParentFees] payment payload snapshot:', {
+          totalRemaining: paymentPayload?.totalRemaining,
+          totalDue: paymentPayload?.totalDue,
+          totalPaid: paymentPayload?.totalPaid,
+          paidAmount: paymentPayload?.paidAmount,
+          finalAmount: paymentPayload?.finalAmount,
+          completeFee: paymentPayload?.completeFee,
+          feeBreakdown: Array.isArray(paymentPayload?.feeBreakdown)
+            ? paymentPayload.feeBreakdown.map((row: any) => ({
+                key: row?.key,
+                label: row?.label,
+                total: row?.total,
+                amount: row?.amount,
+                paid: row?.paid,
+                discount: row?.discount,
+                due: row?.due,
+              }))
+            : [],
+        });
+
+        setClassFeeSource(Object.keys(feeStructureData || {}).length ? feeStructureData : fallbackClassFeeData || null);
+        setPaymentDetails({
+          ...(paymentPayload || {}),
+          ...(feeApiPayload || {}),
+          ...(feeApiPayload?.studentFeeDetails || {}),
+          ...(studentFeeData || {}),
+          ...(paymentPayload?.discounts || {}),
+        });
+        setFeeApiSummary(feeApiPayload || null);
+        console.log('[ParentFees] feeStructureData keys:', Object.keys(feeStructureData || {}));
+        console.log('[ParentFees] fallbackClassFeeData keys:', Object.keys(fallbackClassFeeData || {}));
+        console.log('[ParentFees] mergedFeeData keys:', Object.keys(mergedFeeData || {}));
       } catch {
         if (active) {
           showError('Fee Load Error', 'Unable to load fee details.');
-          setFees(null);
+          setClassFeeSource(null);
+          setPaymentDetails(null);
         }
-      }
-    };
-
-    const fetchPaymentDetails = async () => {
-      try {
-        if (!studentData?.studentId || !studentData?.schoolCode) return;
-        const paymentApiUrl = `https://cleezoclass.com:4000/api/payment/${studentData.studentId}?schoolCode=${studentData.schoolCode}`;
-        console.log('[ParentFees] paymentDetails API:', paymentApiUrl);
-        console.log('[ParentFees] paymentDetails payload:', {
-          studentId: studentData.studentId,
-          schoolCode: studentData.schoolCode,
-        });
-        const res = await axios.get(
-          paymentApiUrl
-        );
-        if (!active) return;
-        console.log('[ParentFees] payment response:', res?.data?.payments || {});
-        setPaymentDetails(res?.data?.payments || {});
-      } catch {
-        if (active) setPaymentDetails(null);
       }
     };
 
     const run = async () => {
       setLoading(true);
-      await Promise.all([fetchFees(), fetchPaymentDetails()]);
+      await fetchFees();
       if (active) setLoading(false);
     };
 
@@ -744,7 +457,116 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
     return () => {
       active = false;
     };
-  }, [studentData?.class_name, studentData?.section, studentData?.schoolCode, studentData?.studentId, showError]);
+  }, [studentData?.class_name, studentData?.section, studentData?.schoolCode, studentData?.studentId, studentData?.username, showError]);
+
+  const paymentSource = useMemo(
+    () => {
+      const flattened: Record<string, any> = {
+        ...(paymentDetails || {}),
+        ...(paymentDetails?.discounts || {}),
+      };
+
+      Object.entries(paymentDetails?.dynamicFeeTotals || {}).forEach(([key, value]) => {
+        const normalized = normalizeFeeKey(key);
+        if (!normalized) return;
+        flattened[normalized] = value;
+      });
+
+      (Array.isArray(paymentDetails?.feeBreakdown) ? paymentDetails.feeBreakdown : []).forEach((row: any) => {
+        const label = String(row?.label || row?.key || '').trim();
+        const normalized = normalizeFeeKey(label);
+        if (!normalized) return;
+
+        flattened[normalized] = row?.total ?? row?.amount ?? flattened[normalized];
+        flattened[`${normalized}_paid`] = row?.paid ?? flattened[`${normalized}_paid`];
+        flattened[`${normalized}_discount`] = row?.discount ?? flattened[`${normalized}_discount`];
+        flattened[`${normalized}_due`] = row?.due ?? flattened[`${normalized}_due`];
+      });
+
+      console.log('[ParentFees] flattened paymentSource:', flattened);
+      return flattened;
+    },
+    [paymentDetails]
+  );
+
+  const feeRows = useMemo(() => {
+    const dynamicRows = buildRowsFromSource(paymentSource, classFeeSource, dynamicFeeTypes, paymentDetails?.feeBreakdown || []);
+    const allowedLabels = new Set(
+      dynamicFeeTypes
+        .map((item) => normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || ''))
+        .filter(Boolean)
+    );
+    const finalRows = dynamicRows.filter((row) => allowedLabels.size === 0 || allowedLabels.has(normalizeFeeKey(row.label)));
+
+    console.log('[ParentFees] dynamicRows count:', dynamicRows.length);
+    console.log('[ParentFees] final feeRows count:', finalRows.length);
+    console.log('[ParentFees] final feeRows labels:', finalRows.map((row) => row.label));
+    console.log('[ParentFees] paymentSource keys:', Object.keys(paymentSource || {}));
+    console.log('[ParentFees] classFeeSource keys:', Object.keys(classFeeSource || {}));
+    console.log('[ParentFees] feeSource resolved amounts:', {
+      dynamicTypeCount: dynamicFeeTypes.length,
+    });
+    console.log('[ParentFees] summary row values:', finalRows.map((row) => ({
+      label: row.label,
+      amount: row.amount,
+      paid: row.paid,
+      discount: row.discount,
+      due: row.due,
+    })));
+
+    return finalRows;
+  }, [classFeeSource, dynamicFeeTypes, paymentDetails?.feeBreakdown, paymentSource]);
+
+  const getExplicitNumeric = (source: Record<string, any> | null, keys: string[]) => {
+    for (const key of keys) {
+      if (!source || !Object.prototype.hasOwnProperty.call(source, key)) continue;
+      const raw = source[key];
+      if (raw === null || raw === undefined || raw === '') continue;
+      return toNumber(raw);
+    }
+    return null;
+  };
+
+  const summaryTotalFee = useMemo(() => {
+    return feeRows.reduce((sum, row) => sum + row.amount, 0);
+  }, [feeRows]);
+
+  const summaryPaid = useMemo(() => {
+    return feeRows.reduce((sum, row) => sum + row.paid, 0);
+  }, [feeRows]);
+
+  const summaryDiscount = useMemo(() => {
+    return feeRows.reduce((sum, row) => sum + row.discount, 0);
+  }, [feeRows]);
+
+  const summaryDue = useMemo(() => {
+    return feeRows.reduce((sum, row) => sum + row.due, 0);
+  }, [feeRows]);
+
+  const feeChartMax = Math.max(summaryTotalFee, summaryPaid + summaryDue, 1);
+
+  useEffect(() => {
+    console.log('[ParentFees] summary totals:', {
+      summaryTotalFee,
+      summaryPaid,
+      summaryDiscount,
+      summaryDue,
+      feeChartMax,
+      feeRowsCount: feeRows.length,
+    });
+  }, [feeChartMax, feeRows.length, summaryDiscount, summaryDue, summaryPaid, summaryTotalFee]);
+
+  const studentProfile = useMemo(
+    () => ({
+      studentName: paymentDetails?.studentName || studentData?.name || '-',
+      fatherName: paymentDetails?.father_name || studentData?.father_name || studentData?.fatherName || '-',
+      mobile: paymentDetails?.phone_no || studentData?.phone_no || studentData?.mobile || studentData?.phoneNumber || '-',
+      admissionNo: paymentDetails?.admission_no || studentData?.admission_no || studentData?.admissionNo || '-',
+      gender: paymentDetails?.gender || studentData?.gender || '-',
+      email: paymentDetails?.email || studentData?.email || '-',
+    }),
+    [paymentDetails, studentData]
+  );
 
   if (loading || !studentData) {
     return (
@@ -755,547 +577,376 @@ const ParentFees: React.FC<FeesViewProps> = ({ navigation, embedded = false }) =
         </View>
       </View>
     );
-  }
-
-  if (!fees) {
-    return (
-      <View style={embedded ? styles.embeddedShell : styles.safeArea}>
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>No fee data available.</Text>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack?.()}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  const feeSource = {
-    ...(fees || {}),
-    ...(paymentDetails || {}),
-    ...(paymentDetails?.discounts || {}),
-  };
-  console.log('[ParentFees] feeSource merged:', feeSource);
-  console.log('[ParentFees] feeSource keys:', Object.keys(feeSource || {}));
-  console.log('[ParentFees] fees state:', fees);
-  console.log('[ParentFees] paymentDetails state:', paymentDetails);
-  const backendFeeRows = buildFeeRowsFromBackend(paymentDetails);
-  const summaryFeeRows = buildFeeRowsFromSummary(feeSource, dynamicFeeTypes);
-  const dynamicFeeRows = buildDynamicFeeRows(feeSource);
-  console.log('[ParentFees] backendFeeRows:', backendFeeRows);
-  console.log('[ParentFees] summaryFeeRows:', summaryFeeRows);
-  console.log('[ParentFees] dynamicFeeRows:', dynamicFeeRows);
-  const finalAmount = Number(
-    paymentDetails?.completeFee ??
-      paymentDetails?.originalCompleteFee ??
-      fees?.Final_Amount ??
-      fees?.CompleteFee ??
-      0
-  );
-  const webStyleRows = (() => {
-    const payment = paymentDetails || {};
-    const numeric = (value: any) => {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-
-    const rows = [
-      {
-        key: 'tuition-fee',
-        label: 'Tuition Fee',
-        amount: numeric(payment.completeFee || payment.originalCompleteFee || fees?.CompleteFee || 0),
-        paid: numeric(payment.paidAmount),
-        discount: numeric(payment.tuitionDiscount || payment.discounts?.tuitionDiscount),
-        due: numeric(payment.tuitionRemaining),
-      },
-      {
-        key: 'admission-fee',
-        label: 'Admission Fee',
-        amount: numeric(payment.admissionFee || payment.originalAdmissionFee),
-        paid: numeric(payment.admissionPaid),
-        discount: numeric(payment.admissionDiscount || payment.discounts?.admissionDiscount),
-        due: numeric(payment.admissionRemaining),
-      },
-      {
-        key: 'book-fee',
-        label: 'Books Fee',
-        amount: numeric(payment.bookFee || payment.originalBookFee),
-        paid: numeric(payment.bookPaid),
-        discount: numeric(payment.bookDiscount || payment.discounts?.bookDiscount || 0),
-        due: numeric(payment.bookRemaining),
-      },
-      {
-        key: 'uniform-fee',
-        label: 'Uniform Fee',
-        amount: numeric(payment.uniformFee || payment.originalUniformFee),
-        paid: numeric(payment.uniformPaid),
-        discount: numeric(payment.uniformDiscount || payment.discounts?.uniformDiscount || 0),
-        due: numeric(payment.uniformRemaining),
-      },
-      {
-        key: 'exam-fee',
-        label: 'Exam Fee',
-        amount: numeric(payment.examFee || payment.originalExamFee),
-        paid: numeric(payment.examPaid),
-        discount: numeric(payment.examDiscount || payment.discounts?.examDiscount || 0),
-        due: numeric(payment.examRemaining),
-      },
-      {
-        key: 'bus-fee',
-        label: 'Bus Fee',
-        amount: numeric(payment.busFee || payment.originalBusFee),
-        paid: numeric(payment.busPaid),
-        discount: numeric(payment.busDiscount || payment.discounts?.busDiscount),
-        due: numeric(payment.busRemaining),
-      },
-      {
-        key: 'other-fee',
-        label: 'Other Fees',
-        amount: numeric(payment.othersFee || payment.originalOthersFee),
-        paid: numeric(payment.othersPaid),
-        discount: numeric(payment.othersDiscount || payment.discounts?.othersDiscount || 0),
-        due: numeric(payment.othersRemaining),
-      },
-      {
-        key: 'residential-fee',
-        label: 'Residential Fee',
-        amount: numeric(payment.residentialFee || payment.originalResidentialFee),
-        paid: numeric(payment.residentialPaid),
-        discount: numeric(payment.residentialDiscount || payment.discounts?.residentialDiscount || 0),
-        due: numeric(payment.residentialRemaining),
-      },
-    ];
-
-    const dynamicRows: Array<{ key: string; label: string; amount: number; paid: number; discount: number; due: number }> = [];
-    const dynamicDiscounts = payment.dynamicFeeDiscounts || {};
-    const dynamicTotals = payment.dynamicFeeTotals || {};
-
-    const addDynamicRow = (label: string, total: any, paid: any, discount: any) => {
-      const amount = numeric(total);
-      const paidAmount = numeric(paid);
-      const discountAmount = numeric(discount);
-      const dueAmount = Math.max(amount - paidAmount - discountAmount, 0);
-      if (amount <= 0 && paidAmount <= 0 && discountAmount <= 0 && dueAmount <= 0) return;
-      dynamicRows.push({
-        key: normalizeFeeKey(label),
-        label,
-        amount,
-        paid: paidAmount,
-        discount: discountAmount,
-        due: dueAmount,
-      });
-    };
-
-    Object.entries(dynamicTotals).forEach(([key, total]) => {
-      const label = formatFeeLabel(key);
-      addDynamicRow(
-        label,
-        total,
-        payment[`${key}_paid`] ?? payment[`${key}Paid`] ?? payment[`${key}_fee_paid`],
-        payment[`${key}_discount`] ?? payment[`${key}Discount`] ?? dynamicDiscounts?.[key]
-      );
-    });
-
-    if (Array.isArray(payment.feeBreakdown) && payment.feeBreakdown.length) {
-      payment.feeBreakdown.forEach((row: any) => {
-        const label = String(row?.label || row?.key || '').trim();
-        if (!label) return;
-        const amount = numeric(row?.total ?? row?.amount);
-        const paidAmount = numeric(row?.paid);
-        const discountAmount = numeric(row?.discount);
-        const dueAmount = numeric(row?.due);
-        const normalized = normalizeFeeKey(label);
-        if (
-          ['class_fee', 'tuition_fee', 'admission_fee', 'books_fee', 'uniform_fee', 'bus_fee', 'exam_fee', 'other_fee', 'residential_fee'].includes(normalized)
-        ) {
-          return;
-        }
-        if (amount <= 0 && paidAmount <= 0 && discountAmount <= 0 && dueAmount <= 0) return;
-        dynamicRows.push({
-          key: normalized || label,
-          label,
-          amount,
-          paid: paidAmount,
-          discount: discountAmount,
-          due: dueAmount || Math.max(amount - paidAmount - discountAmount, 0),
-        });
-      });
-    }
-
-    const combined = [...rows, ...dynamicRows];
-    const seen = new Set<string>();
-    return combined.filter((row) => {
-      const key = normalizeFeeKey(row.label);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return row.amount > 0 || row.paid > 0 || row.discount > 0 || row.due > 0;
-    });
-  })();
-
-  const totalPaidAmount = webStyleRows.reduce((sum, row) => sum + row.paid, 0);
-  const totalDiscount = webStyleRows.reduce((sum, row) => sum + row.discount, 0);
-  const totalDue =
-    Number(paymentDetails?.totalRemaining ?? paymentDetails?.totalDue ?? 0) ||
-    Math.max(finalAmount - totalPaidAmount - totalDiscount, 0);
-
-  console.log('[ParentFees] computed totals:', {
-    finalAmount,
-    totalPaid: totalPaidAmount,
-    totalDue,
-    fees,
-    feeRowsCount: webStyleRows.length,
-  });
-
-  const studentProfile = {
-    studentName: paymentDetails?.studentName || studentData?.name || '-',
-    fatherName: paymentDetails?.father_name || studentData?.father_name || studentData?.fatherName || '-',
-    mobile: paymentDetails?.phone_no || studentData?.phone_no || studentData?.mobile || studentData?.phoneNumber || '-',
-    admissionNo: paymentDetails?.admission_no || studentData?.admission_no || studentData?.admissionNo || '-',
-    gender: paymentDetails?.gender || studentData?.gender || '-',
-    email: paymentDetails?.email || studentData?.email || '-',
-  };
-
-  const paymentRows = webStyleRows
-    .map((row) => ({
-      id: row.key,
-      feeType: row.label,
-      discount: row.discount,
-      totalAmount: row.amount,
-      paidAmount: row.paid,
-      dueAmount: row.due,
-      paymentDate: '-',
-    }))
-    .filter((row) => row.totalAmount > 0 || row.paidAmount > 0 || row.dueAmount > 0);
+  }  
 
   const content = (
     <View style={embedded ? styles.embeddedContent : styles.content}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.webShell}>
-        <View style={styles.webTopRow}>
-          <View style={styles.webBrandBlock}>
-            <Image source={logoImage} style={styles.logo} resizeMode="contain" />
-          </View>
-          <View style={styles.webTitleBlock}>
-            <Text style={styles.webTitle}>Fees</Text>
-            <Text style={styles.webSubtitle}>
-              {studentProfile.studentName} {studentData?.class_name || ''}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.backBtn} onPress={() => navigation?.goBack?.()}>
-            <Text style={styles.backBtnText}>Back</Text>
-          </TouchableOpacity>
-        </View>
+      <StatusBar barStyle="light-content" backgroundColor="#0D3F66" translucent={false} />
 
-        <View style={styles.webTabRow}>
-          <TouchableOpacity
-            style={[styles.webTab, activeTab === 'studentData' && styles.webTabActive]}
-            onPress={() => setActiveTab('studentData')}
-          >
-            <Text style={[styles.webTabText, activeTab === 'studentData' && styles.webTabTextActive]}>
-              Student Data
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.webTab, activeTab === 'transactions' && styles.webTabActive]}
-            onPress={() => setActiveTab('transactions')}
-          >
-            <Text style={[styles.webTabText, activeTab === 'transactions' && styles.webTabTextActive]}>
-              Student Transactions
-            </Text>
-          </TouchableOpacity>
-        </View>
+      <LinearGradient
+        colors={['#0D3F66', '#BFD7FA', '#F6F8FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.feeGradientSection}
+      >
+        {!embedded ? (
+          <View style={styles.headerRow}>
+            
+        
+            
+          </View>
+        ) : null}
 
-        {activeTab === 'studentData' ? (
-          <View style={styles.studentDataGrid}>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Student</Text>
-              <Text style={styles.infoValue}>{studentProfile.studentName}</Text>
+        <View style={styles.feeGraphSection}>
+          <View style={styles.feeGraphTitleRow}>
+            <Text style={styles.feeGraphTitle}>Fee Status</Text>
+            <Text style={styles.feeGraphSubtitle}>Paid amount vs amount remaining</Text>
+          </View>
+
+          <View style={styles.feeLegendRow}>
+            <View style={styles.feeLegendItem}>
+              <View style={[styles.feeLegendDot, { backgroundColor: '#2EE59D' }]} />
+              <Text style={styles.feeLegendText}>Paid so far</Text>
             </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Father Name</Text>
-              <Text style={styles.infoValue}>{studentProfile.fatherName}</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Mobile Number</Text>
-              <Text style={styles.infoValue}>{studentProfile.mobile}</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Admission No</Text>
-              <Text style={styles.infoValue}>{studentProfile.admissionNo}</Text>
-            </View>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Gender</Text>
-              <Text style={styles.infoValue}>{studentProfile.gender}</Text>
-            </View>
-            <View style={styles.infoCardWide}>
-              <Text style={styles.infoLabel}>Email</Text>
-              <Text style={styles.infoValue}>{studentProfile.email}</Text>
+            <View style={styles.feeLegendItem}>
+              <View style={[styles.feeLegendDot, { backgroundColor: '#F36B79' }]} />
+              <Text style={styles.feeLegendText}>Amount remaining</Text>
             </View>
           </View>
-        ) : (
-          <View style={styles.transactionWrap}>
-            <View style={styles.summaryBar}>
-              <View style={styles.summaryMetric}>
-                <Text style={styles.summaryMetricLabel}>Total Fee</Text>
-                <Text style={styles.summaryMetricValue}>{formatINR(finalAmount)}</Text>
-              </View>
-              <View style={styles.summaryMetric}>
-                <Text style={styles.summaryMetricLabel}>Paid</Text>
-                <Text style={styles.summaryMetricValue}>{formatINR(totalPaidAmount)}</Text>
-              </View>
-              <View style={styles.summaryMetric}>
-                <Text style={styles.summaryMetricLabel}>Discount</Text>
-                <Text style={styles.summaryMetricValue}>{formatINR(totalDiscount)}</Text>
-              </View>
-              <View style={styles.summaryMetric}>
-                <Text style={styles.summaryMetricLabel}>Due</Text>
-                <Text style={styles.summaryMetricValue}>{formatINR(totalDue)}</Text>
-              </View>
-            </View>
 
-            <View style={styles.table}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.th, styles.thFee]}>Fee Type</Text>
-                <Text style={styles.th}>Discount</Text>
-                <Text style={styles.th}>Total</Text>
-                <Text style={styles.th}>Paid</Text>
-                <Text style={styles.th}>Due</Text>
-                <Text style={styles.th}>Date</Text>
-              </View>
-              <ScrollView
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.tableBody}
-              >
-                {paymentRows.length ? (
-                  paymentRows.map((row) => (
-                    <View key={row.id} style={styles.tableRow}>
-                      <Text style={[styles.td, styles.tdFee]} numberOfLines={2}>
-                        {row.feeType}
-                      </Text>
-                      <Text style={styles.td}>{formatINR(row.discount)}</Text>
-                      <Text style={styles.td}>{formatINR(row.totalAmount)}</Text>
-                      <Text style={styles.td}>{formatINR(row.paidAmount)}</Text>
-                      <Text style={styles.td}>{formatINR(row.dueAmount)}</Text>
-                      <Text style={styles.td}>{row.paymentDate}</Text>
+          <View style={styles.feeChartCard}>
+            <View style={styles.feeChartGrid}>
+              {[
+                { label: 'Paid so far', value: summaryPaid, color: '#2EE59D' },
+                { label: 'Amount remaining', value: summaryDue, color: '#F36B79' },
+              ].map((item) => {
+                const heightPct = `${Math.max(6, (item.value / feeChartMax) * 100)}%`;
+                return (
+                  <View key={item.label} style={styles.feeChartItem}>
+                    <Text style={styles.feeChartValue}>{formatINR(item.value)}</Text>
+                    <View style={styles.feeChartBarTrack}>
+                      <View
+                        style={[
+                          styles.feeChartBarFill,
+                          {
+                            height: heightPct,
+                            backgroundColor: item.color,
+                          },
+                        ]}
+                      />
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.emptyTableText}>No fee breakdown available.</Text>
-                )}
-              </ScrollView>
+                    <Text style={styles.feeChartLabel}>{item.label}</Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
-        )}
-      </View>
+        </View>
+      </LinearGradient>
+
+      <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.studentDataWrap}>
+        <View style={styles.transactionWrap}>
+          <View style={styles.summaryRow}>
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[styles.summaryGradientCard, styles.summaryCardLeft]}
+            >
+              <View style={styles.summaryGradientIconWrap}>
+                <MaterialIcons name="payments" size={24} color="#1A1A1A" />
+              </View>
+              <View style={styles.summaryCardContent}>
+                <Text style={styles.summaryGradientLabel}>Discount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryDiscount)}</Text>
+                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryTotalFee)}</Text>
+              </View>
+            </LinearGradient>
+            <LinearGradient
+              colors={['#D7C5FF', '#A670EE', '#6D2DE1']}
+              start={{ x: 0.05, y: 0.05 }}
+              end={{ x: 0.95, y: 0.95 }}
+              style={[styles.summaryGradientCard, styles.summaryCardRight]}
+            >
+              <View style={styles.summaryGradientIconWrap}>
+                <MaterialIcons name="account-balance-wallet" size={24} color="#1A1A1A" />
+              </View>
+              <View style={styles.summaryCardContent}>
+                <Text style={styles.summaryGradientLabel}>Due</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryDue)}</Text>
+                <Text style={[styles.summaryGradientLabel, { marginTop: 8 }]}>Amount</Text>
+                <Text style={styles.summaryGradientValue}>{formatINR(summaryPaid)}</Text>
+              </View>
+            </LinearGradient>
+          </View>
+
+          <View style={styles.tableCard}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.th, styles.thFee]}>Fee Type</Text>
+              <Text style={styles.th}>Discount</Text>
+              <Text style={styles.th}>Total</Text>
+              <Text style={styles.th}>Paid</Text>
+              <Text style={styles.th}>Due</Text>
+            </View>
+
+            <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={false} contentContainerStyle={styles.tableBody}>
+              {feeRows.length ? (
+                feeRows.map((row) => (
+                  <View key={row.key} style={styles.tableRow}>
+                    <Text style={[styles.td, styles.tdFee]} numberOfLines={2}>
+                      {row.label}
+                    </Text>
+                    <Text style={styles.td}>{formatINR(row.discount)}</Text>
+                    <Text style={styles.td}>{formatINR(row.amount)}</Text>
+                    <Text style={styles.td}>{formatINR(row.paid)}</Text>
+                    <Text style={styles.td}>{formatINR(row.due)}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No fee breakdown available.</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </ScrollView>
+              <ParentFooter />
+
     </View>
   );
 
-  return embedded ? (
-    <View style={styles.embeddedCard}>
-      {content}
-      <ParentFooter embedded={embedded} />
-    </View>
-  ) : (
-    <SafeAreaView style={styles.safeArea}>
-      {content}
-      <ParentFooter />
-    </SafeAreaView>
-  );
+  return embedded ? <View style={styles.embeddedCard}>{content}</View> : <SafeAreaView style={styles.safeArea}>{content}</SafeAreaView>;
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#F6F6F7' },
-  content: { flex: 1, padding: 16, paddingBottom: 28 },
+  safeArea: { flex: 1, backgroundColor: '#f6f6f7' },
+  content: { flex: 1, paddingHorizontal: 16, paddingTop: 0, paddingBottom: 20, backgroundColor: '#FFFFFF' },
   embeddedContent: { flex: 1, paddingHorizontal: 0, paddingTop: 0, paddingBottom: 20 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  headerTitleBlock: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 26, fontWeight: '800', color: '#111' },
-  subtitle: { marginTop: 4, fontSize: 13, color: '#666' },
-  backBtn: { backgroundColor: '#404040', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  embeddedShell: { flex: 1, backgroundColor: '#FFFFFF' },
+  embeddedCard: { marginHorizontal: 0 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  headerBrand: { width: 36, alignItems: 'flex-start' },
+  headerTitleBlock: { flex: 1, alignItems: 'center' },
+  title: { fontSize: 24, fontWeight: '800', color: '#111' },
+  subtitle: { marginTop: 4, fontSize: 13, color: '#666', textAlign: 'center' },
+  logo: { width: 30, height: 30 },
+  backBtn: { backgroundColor: '#404040', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 18 },
   backBtnText: { color: '#fff', fontWeight: '700' },
-  summaryCard: {
-    backgroundColor: '#f6f6f7',
-    borderRadius: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
-    padding: 18,
-    marginBottom: 16,
-  },
-  embeddedSummaryCard: {
-    padding: 10,
-  },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryBlock: { flex: 1 },
-  summaryLabel: { fontSize: 12, color: '#666', fontWeight: '700' },
-  amount: { fontSize: 22, fontWeight: '800', color: '#111', marginTop: 6 },
-  duePill: { marginTop: 14, backgroundColor: '#FFF2B3', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, alignSelf: 'flex-start' },
-  dueText: { fontSize: 14, fontWeight: '800', color: '#111' },
-  scrollArea: { flex: 1, minHeight: 260 },
-  breakdownScroll: { flex: 1 },
-  scrollContent: {
+  feeGradientSection: {
+    marginHorizontal: -16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  sectionCard: {
-    backgroundColor: '#f6f6f7',
-    borderRadius: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
-    padding: 14,
-    marginBottom: 12,
-  },
-  embeddedSectionCard: {
-    padding: 10,
-  },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#111', marginBottom: 12 },
-  lineRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eee' },
-  lineLabel: { fontSize: 13, color: '#333', fontWeight: '600' },
-  lineValue: { fontSize: 13, color: '#111', fontWeight: '700' },
-  feeCard: {
-    backgroundColor: '#FAFAFA',
-    borderRadius: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',
-    padding: 12,
-    marginBottom: 10,
-  },
-  feeCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  feeCardTitle: { fontSize: 14, fontWeight: '800', color: '#111' },
-  feeCardAmount: { fontSize: 14, fontWeight: '800', color: '#111' },
-  feeMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  feeGraphSection: {
     paddingTop: 4,
   },
-  feeMetaLabel: { fontSize: 12, color: '#666', fontWeight: '600' },
-  feeMetaValue: { fontSize: 12, color: '#111', fontWeight: '700' },
-  installmentCard: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e7',
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderRightWidth: 0,
-    borderRadius: 14,    
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: '#FAFAFA',
+  feeGraphTitleRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    marginBottom: 8,
   },
-  installmentTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  installmentTitle: { fontSize: 14, fontWeight: '800', color: '#111' },
-  installmentAmount: { fontSize: 14, fontWeight: '800', color: '#111' },
-  installmentText: { fontSize: 12, color: '#555', marginTop: 2 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  loadingText: { marginTop: 10, color: '#555' },
-  emptyText: { textAlign: 'center', color: '#666', marginTop: 6 },
-  embeddedShell: { padding: 0 },
-  embeddedHeader: { marginBottom: 12 },
-  embeddedTitle: { fontSize: 22, fontWeight: '800', color: '#111' },
-  logo: { width: 30, height: 30 },
-  embeddedCard: { marginHorizontal: 0 },
-  webShell: { flex: 1 },
-  webTopRow: {
+  feeGraphTitle: {
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: '#111',
+  },
+  feeGraphSubtitle: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+    textAlign: 'left',
+  },
+  feeLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  feeLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    gap: 10,
+    flex: 1,
   },
-  webBrandBlock: {
-    width: 42,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
+  feeLegendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    marginRight: 6,
   },
-  webTitleBlock: {
+  feeLegendText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '700',
+  },
+  feeChartCard: {
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  feeChartGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    minHeight: 220,
+  },
+  feeChartItem: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 8,
   },
-  webTitle: { fontSize: 24, fontWeight: '800', color: '#111', textAlign: 'center' },
-  webSubtitle: { marginTop: 4, fontSize: 13, color: '#666', textAlign: 'center' },
-  webTabRow: {
+  feeChartValue: {
+    color: '#111',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  feeChartBarTrack: {
+    width: '62%',
+    height: 170,
+    backgroundColor: 'rgba(17,24,39,0.08)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  feeChartBarFill: {
+    width: '100%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    minHeight: 10,
+  },
+  feeChartLabel: {
+    color: '#333',
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  tabRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
     flexWrap: 'wrap',
+    marginBottom: 14,
   },
-  webTab: {
+  tabBtn: {
     borderWidth: 1,
     borderColor: '#D8D8DD',
     borderRadius: 18,
+    backgroundColor: '#fff',
     paddingVertical: 10,
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    marginRight: 10,
+    marginBottom: 10,
   },
-  webTabActive: {
+  tabBtnActive: {
     backgroundColor: '#404040',
     borderColor: '#404040',
   },
-  webTabText: { fontSize: 13, fontWeight: '700', color: '#222' },
-  webTabTextActive: { color: '#fff' },
-  studentDataGrid: {
+  tabText: { fontSize: 13, fontWeight: '700', color: '#222' },
+  tabTextActive: { color: '#fff' },
+  studentDataWrap: { paddingBottom: 8 },
+  profileGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
   },
   infoCard: {
-    flexBasis: '31%',
+    width: '31.5%',
     minWidth: 92,
     backgroundColor: '#FBF4F6',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E6D6DA',
     padding: 12,
+    marginRight: 8,
+    marginBottom: 8,
   },
   infoCardWide: {
-    flexBasis: '64%',
+    width: '64%',
     minWidth: 180,
     backgroundColor: '#FBF4F6',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E6D6DA',
     padding: 12,
+    marginBottom: 8,
   },
   infoLabel: { fontSize: 12, color: '#777', marginBottom: 8, textAlign: 'center' },
   infoValue: { fontSize: 15, color: '#222', fontWeight: '800', textAlign: 'center' },
   transactionWrap: { flex: 1 },
-  summaryBar: {
+  summaryRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 8,
   },
-  summaryMetric: {
-    flexBasis: '48%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E6E6EA',
-    padding: 12,
+  summaryGradientCard: {
+    flex: 1,
+    minHeight: 210,
+    borderRadius: 28,
+    padding: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
-  summaryMetricLabel: { fontSize: 12, color: '#666', fontWeight: '700' },
-  summaryMetricValue: { marginTop: 6, fontSize: 17, color: '#111', fontWeight: '800' },
-  table: {
+  summaryCardLeft: { marginRight: 8 },
+  summaryCardRight: { marginLeft: 8 },
+  summaryGradientIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 'auto',
+    marginBottom: 14,
+  },
+  summaryCardContent: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 2,
+  },
+  summaryGradientLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.86)',
+    textAlign: 'right',
+  },
+  summaryGradientValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'right',
+  },
+  tableCard: {
+    flex: 1,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E2E6',
-    overflow: 'hidden',
     backgroundColor: '#fff',
-    flex: 1,
+    overflow: 'hidden',
   },
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: '#FDECEF',
+    backgroundColor: '#f6f6f7',
     paddingVertical: 10,
     paddingHorizontal: 8,
   },
@@ -1306,9 +957,9 @@ const styles = StyleSheet.create({
     color: '#111',
     textAlign: 'center',
   },
-  thFee: { flex: 1.3, textAlign: 'left' },
+  thFee: { flex: 1.25, textAlign: 'left' },
   tableBody: {
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   tableRow: {
     flexDirection: 'row',
@@ -1324,12 +975,10 @@ const styles = StyleSheet.create({
     color: '#222',
     textAlign: 'center',
   },
-  tdFee: { flex: 1.3, textAlign: 'left', fontWeight: '700' },
-  emptyTableText: {
-    textAlign: 'center',
-    color: '#666',
-    padding: 16,
-  },
+  tdFee: { flex: 1.25, textAlign: 'left', fontWeight: '700' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  loadingText: { marginTop: 10, color: '#555' },
+  emptyText: { textAlign: 'center', color: '#666', marginTop: 6, padding: 14 },
 });
 
 export default ParentFees;

@@ -22,6 +22,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
+import ParentFooter from './ParentFooter';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ParentAttendance'>;
 
@@ -497,6 +498,8 @@ const ParentAttendance: React.FC<Props> = ({ navigation }) => {
           </Pressable>
         </View>
       </ScrollView>
+              <ParentFooter />
+      
     </SafeAreaView>
   );
 };

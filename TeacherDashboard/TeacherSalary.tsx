@@ -19,7 +19,7 @@ import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles
 import TeacherFooter from './TeacherFooter';
 import TeacherSummaryCard from './TeacherSummaryCard';
 import { heightPercentageToDP as hp } from 'react-native-responsive-screen';
-
+import LinearGradient from 'react-native-linear-gradient';
 /* ---------------- TYPES ---------------- */
 type RootStackParamList = {
   TeacherSalary: {
@@ -430,6 +430,13 @@ const TeacherSalary: React.FC<
         showsVerticalScrollIndicator={false}
       >
         <View style={local.container}>
+            <LinearGradient
+                                            pointerEvents="none"
+                                            colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                                            start={{ x: 0.05, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.dashboardTopGradient}
+                                          >
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -458,7 +465,7 @@ const TeacherSalary: React.FC<
               </TeacherSummaryCard>
             ))}
           </View>
-
+</LinearGradient>
           <View style={ui.card}>
             <Text style={ui.cardLabel}>Salary Month</Text>
             <View style={ui.dropdownShell}>

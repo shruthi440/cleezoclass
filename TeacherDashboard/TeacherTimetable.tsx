@@ -27,6 +27,8 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import { TouchableWithoutFeedback } from 'react-native';
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
+import LinearGradient from 'react-native-linear-gradient';
+import TeacherFooter from './TeacherFooter';
 
 /* ---------------- TYPES & INTERFACES ---------------- */
 interface Period {
@@ -763,6 +765,14 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <ScrollView style={styles.scrollView} contentContainerStyle={ui.page}>
+
+                <LinearGradient
+        pointerEvents="none"
+        colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+        start={{ x: 0.05, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.dashboardTopGradient}
+      >
         <View style={ttStyles.summaryRow}>
           <TeacherSummaryCard style={[ttStyles.summaryCard, ttStyles.summaryCardLeft]}>
             <Text style={ttStyles.summaryLabel}>Next Class</Text>
@@ -788,7 +798,7 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
             </Text>
           </TeacherSummaryCard>
         </View>
-
+</LinearGradient>
         <View style={ui.card}>
           <Text style={ui.cardLabel}>Class and Section</Text>
           <View style={ui.modeSelector}>
@@ -897,6 +907,7 @@ const sortedClassOptions = [...new Set(classes.map(normalizeClassName).filter(Bo
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      <TeacherFooter />
 
     </SafeAreaView>
   );
@@ -938,18 +949,18 @@ const ttStyles = {
   summaryLabel: {
     fontSize: 12.5,
     fontWeight: '700' as const,
-    color: '#fff',
+    color: '#000',
     marginBottom: 2,
   },
   summaryTitle: {
     fontSize: 18,
     fontWeight: '900' as const,
-    color: '#fff',
+    color: '#000',
     marginBottom: 4,
   },
   summaryMeta: {
     fontSize: 12.5,
     fontWeight: '500' as const,
-    color: '#fff',
+    color: '#000',
   },
 };

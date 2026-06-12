@@ -28,7 +28,9 @@ import TeacherSummaryCard from './TeacherSummaryCard';
 import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
+import LinearGradient from 'react-native-linear-gradient';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 const scaleFont = (size: number) => (SCREEN_WIDTH / 375) * size;
 
 const localStyles = StyleSheet.create({
@@ -419,6 +421,14 @@ const saveTopicOfDay = async (topicName: string) => {
 
       <ScrollView style={styles.scrollView}>
         <View style={styles.container}>
+
+                         <LinearGradient
+                  pointerEvents="none"
+                  colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                  start={{ x: 0.05, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.dashboardTopGradient}
+                >
           <View style={localStyles.summaryRow}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -447,7 +457,7 @@ const saveTopicOfDay = async (topicName: string) => {
               </TeacherSummaryCard>
             ))}
           </View>
-
+</LinearGradient>
      
 
           {/* MAIN CONTAINER */}
@@ -461,61 +471,7 @@ const saveTopicOfDay = async (topicName: string) => {
   <View style={styles.rightNotch} />
 </View>
 {/* MAIN CHART CONTAINER */}
-<View style={styles.chartWrapper}>
 
-  {/* GRAPH (YAxis + Bars) */}
-  <View style={styles.chartFrame1}>
-    <View style={styles.yAxis}>
-      {['dec', 'nov', 'oct', 'sep'].map(m => (
-        <Text key={m} style={styles.axisLabel}>{m}</Text>
-      ))}
-    </View>
-
-    <View style={styles.chartArea1}>
-
-      {/* 6A */}
-      <View style={styles.barPair}>
-        <View style={styles.barRow}>
-          <View style={[styles.bar, styles.runBar, { height: 40 }]} />
-          <View style={[styles.bar, styles.lagBar, { height: 50 }]} />
-        </View>
-        <Text style={styles.barName}>6A</Text>
-      </View>
-
-      {/* 6B */}
-      <View style={styles.barPair}>
-        <View style={styles.barRow}>
-          <View style={[styles.bar, styles.runBar, { height: 70 }]} />
-          <View style={[styles.bar, styles.lagBar, { height: 40 }]} />
-        </View>
-        <Text style={styles.barName}>6B</Text>
-      </View>
-
-      {/* 7B */}
-      <View style={styles.barPair}>
-        <View style={styles.barRow}>
-          <View style={[styles.bar, styles.runBar, { height: 55 }]} />
-          <View style={[styles.bar, styles.lagBar, { height: 20 }]} />
-        </View>
-        <Text style={styles.barName}>7B</Text>
-      </View>
-
-    </View>
-  </View>
-
-  {/* LEGEND (BOTTOM) */}
-  <View style={[styles.legendRow]}>
-    <View style={styles.legendItem}>
-      <View style={[styles.box, styles.runBar]} />
-      <Text>Running</Text>
-    </View>
-    <View style={styles.legendItem}>
-      <View style={[styles.box, styles.lagBar]} />
-      <Text>Lagging</Text>
-    </View>
-  </View>
-
-</View>
 <View style={styles.middleSection}>
 
 {/* TITLE */}

@@ -2841,13 +2841,21 @@ const ChiefDashboard: React.FC<Props> = ({ route }) => {
                 <Ionicons name="chatbubble-outline" size={18} color="#B0B0B5" />
                 <Text style={appStyles.footerNavLabelMuted}>Chat</Text>
               </Pressable>
-              <Pressable
-                style={[appStyles.footerNavItem, styles.footerNavItemRight]}
-                onPress={handleOpenProfilePanel}
-              >
-                <ChiefFooterProfile />
-                <Text style={appStyles.footerNavLabelMuted}>Profile</Text>
-              </Pressable>
+            <Pressable
+  style={[appStyles.footerNavItem, styles.footerNavItemRight]}
+  onPress={handleOpenProfilePanel}
+>
+  {chiefProfile.name ? (
+    <ChiefFooterProfile
+      name={chiefProfile.name}
+      username={chiefProfile.username}
+      designation={chiefProfile.designation}
+    />
+  ) : (
+    <Ionicons name="person-circle-outline" size={24} color="#000" />
+  )}
+  <Text style={appStyles.footerNavLabelMuted}>Profile</Text>
+</Pressable>
             </View>
             <View style={appStyles.footerBrandRow}>
               <Text style={appStyles.poweredBy}>Powered By</Text>

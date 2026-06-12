@@ -37,6 +37,7 @@ export type RootStackParamList = {
   TeacherQuestionPaperGeneration: { username?: string; name?: string } | undefined;
   TeacherLeaveRequest: { username?: string; name?: string } | undefined;
   TeacherChatAndEvents: { username?: string; name?: string } | undefined;
+  TeacherMessage: { username?: string; name?: string } | undefined;
   TeacherEventCalendar: { username?: string; name?: string } | undefined;
   TeacherCounselling: { username?: string; name?: string } | undefined;
   TeacherModuleSummary: { username?: string; name?: string; moduleLabel?: string } | undefined;
@@ -50,6 +51,7 @@ export type RootStackParamList = {
   ParentCalender: { username?: string; name?: string } | undefined;
   ParentPhotos: { username?: string; name?: string } | undefined;
   ParentLiveChatTicket: { username?: string; name?: string } | undefined;
+  ParentMessage: { username?: string; name?: string } | undefined;
   ParentHomepage: { username?: string; name?: string } | undefined;
   ParentDetails: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;

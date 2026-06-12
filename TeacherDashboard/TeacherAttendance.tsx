@@ -25,6 +25,8 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import ticketIcon from '../icons/application.png';
 import { ThemeContext } from '../ThemeContext';
 import TeacherFooter from './TeacherFooter';
+import LinearGradient from 'react-native-linear-gradient';
+
 import {
   globalStyles as styles,
   attendanceStyles as ui,
@@ -439,63 +441,108 @@ const availableSections = selectedClass
         style={styles.scrollView}
         contentContainerStyle={ui.page}
       >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 60, marginBottom: 12 }}>
-          {summaryCards.map((card, index) => (
-              <TeacherSummaryCard
-                key={`${card.title}-${index}`}
-                style={{
-                  flex: 1,
-                  minHeight: 92,
-                  borderRadius: 14,
-                  backgroundColor: 'transparent',
-                  borderWidth: 0,
-                  borderColor: 'transparent',
-                  paddingVertical: 0,
-                  paddingHorizontal: 0,
-                  marginRight: index === 0 ? 4 : 0,
-                  marginLeft: index === 1 ? 4 : 0,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  overflow: 'hidden',
-                 
-                  shadowRadius: 10,
-                  shadowOffset: { width: 0, height: 4 },
-                  elevation: 3,
-                }}
-              >
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' }}>
-                  <Text
-                    style={{ fontSize: 18, fontWeight: '900', color: '#111111', marginRight: 4 }}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {card.title}
-                  </Text>
-                  <Text
-                    style={{ fontSize: 12.5, fontWeight: '500', color: '#252525', lineHeight: 18 }}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {card.subtitle}
-                  </Text>
-                </View>
-                <Text
-                  style={{ marginTop: 20, fontSize: 12.5, fontWeight: '500', color: '#2B2B2B' }}
-                  numberOfLines={2}
-                  ellipsizeMode="tail"
-                >
-                  {card.footer}
-                </Text>
-              </View>
-              <View style={{ width: 34, alignItems: 'flex-end', justifyContent: 'center', paddingTop: 2 }}>
-                <Ionicons name={card.icon} size={28} color="#4C4C4C" />
-              </View>
-              </TeacherSummaryCard>
-            ))}
+           
+          <LinearGradient
+  pointerEvents="none"
+  colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+  start={{ x: 0.05, y: 0 }}
+  end={{ x: 1, y: 1 }}
+  style={styles.dashboardTopGradient}
+>
+  <View
+    style={{
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 60,
+      marginBottom: 12,
+    }}
+  >
+    {summaryCards.map((card, index) => (
+      <TeacherSummaryCard
+        key={`${card.title}-${index}`}
+        style={{
+          flex: 1,
+          minHeight: 92,
+          borderRadius: 14,
+          backgroundColor: 'transparent',
+          borderWidth: 0,
+          borderColor: 'transparent',
+          paddingVertical: 0,
+          paddingHorizontal: 0,
+          marginRight: index === 0 ? 4 : 0,
+          marginLeft: index === 1 ? 4 : 0,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          overflow: 'hidden',
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 3,
+        }}
+      >
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: '900',
+                color: '#111111',
+                marginRight: 4,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {card.title}
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 12.5,
+                fontWeight: '500',
+                color: '#252525',
+                lineHeight: 18,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {card.subtitle}
+            </Text>
           </View>
 
+          <Text
+            style={{
+              marginTop: 20,
+              fontSize: 12.5,
+              fontWeight: '500',
+              color: '#2B2B2B',
+            }}
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {card.footer}
+          </Text>
+        </View>
+
+        <View
+          style={{
+            width: 34,
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            paddingTop: 2,
+          }}
+        >
+          <Ionicons name={card.icon} size={28} color="#4C4C4C" />
+        </View>
+      </TeacherSummaryCard>
+    ))}
+  </View>
+</LinearGradient>
         <View style={ui.card}>
           <Text style={ui.cardLabel}>Class and Section</Text>
           <View style={ui.classSectionRow}>

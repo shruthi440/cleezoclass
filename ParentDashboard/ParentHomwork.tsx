@@ -13,6 +13,8 @@ import {
   Alert,
   Linking,
   useWindowDimensions,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -26,6 +28,7 @@ import ParentFooter from './ParentFooter';
 import axios from 'axios';
 import { ErrorContext } from '../ErrorContext';
 import RNFS from 'react-native-fs';
+import FileViewer from 'react-native-file-viewer';
 
 /* ---------------- INTERNAL COMPONENTS ---------------- */
 
@@ -34,6 +37,29 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
   const [loading, setLoading] = useState(true);
   const { showError } = useContext(ErrorContext);
 
+  // Request storage permission for Android
+  const requestStoragePermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Permission',
+            message: 'App needs access to storage to open files.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn('Storage permission error:', err);
+        return false;
+      }
+    }
+    return true;
+  };
+
   const openHomeworkFile = async (item: any) => {
     try {
       if (!item?.homework_file) {
@@ -41,6 +67,14 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
         return;
       }
 
+      // Request permission for Android
+      const hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        Alert.alert('Permission Denied', 'Storage permission is required to open files.');
+        return;
+      }
+
+      // Determine file extension
       const ext = item.file_type?.includes('pdf')
         ? 'pdf'
         : item.file_type?.includes('png')
@@ -49,24 +83,15 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
         ? 'jpg'
         : 'bin';
 
+      // Save file locally
       const localPath = `${RNFS.CachesDirectoryPath}/parent_hw_${item.id || Date.now()}.${ext}`;
       await RNFS.writeFile(localPath, item.homework_file, 'base64');
-      const fileUrl = `file://${localPath}`;
-      const canOpen = await Linking.canOpenURL(fileUrl);
 
-      if (canOpen) {
-        await Linking.openURL(fileUrl);
-      } else {
-        await Share.share({ url: fileUrl, message: 'Homework document' });
-      }
+      // Open file directly in a native viewer
+      await FileViewer.open(localPath, { showOpenWithDialog: true });
     } catch (e) {
-      try {
-        const fallbackPath = `${RNFS.CachesDirectoryPath}/parent_hw_${item?.id || Date.now()}.bin`;
-        await RNFS.writeFile(fallbackPath, item?.homework_file || '', 'base64');
-        await Share.share({ url: `file://${fallbackPath}`, message: 'Homework document' });
-      } catch {
-        Alert.alert('Error', 'Unable to open this file.');
-      }
+      console.error('Error opening file:', e);
+      Alert.alert('Error', 'Unable to open this file. Please try again.');
     }
   };
 
@@ -80,15 +105,10 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
           `http://162.215.210.38:3010/api/homework-lists?class_name=${encodeURIComponent(studentData.class_name)}&section=${encodeURIComponent(studentData.section)}&schoolCode=${encodeURIComponent(studentData.schoolCode)}&username=${encodeURIComponent(studentData.username || '')}`
         );
         setHomework(res.data || []);
-      }
-  catch {
-  showError(
-    'Homework Error',
-    'Unable to load homework. Please try again.'
-  );
-}
-
-       finally {
+      } catch (error) {
+        console.error('Homework fetch error:', error);
+        showError('Homework Error', 'Unable to load homework. Please try again.');
+      } finally {
         setLoading(false);
       }
     };
@@ -101,7 +121,7 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
   return (
     <View style={{ padding: 10 }}>
       {homework.map((item: any, index: number) => (
-        <View key={index} style={{ padding: 15, backgroundColor: '#f6f6f7', marginBottom: 10,  }}>
+        <View key={index} style={{ padding: 15, backgroundColor: '#f6f6f7', marginBottom: 10, borderRadius: 8 }}>
           <Text style={{ fontWeight: 'bold', fontSize: 16 }}>{item.subject}</Text>
           {item.description ? <Text style={{ color: '#555', marginVertical: 4 }}>{item.description}</Text> : null}
           <Text style={{ fontSize: 12, color: '#999' }}>By: {item.uploader_name} | {new Date(item.date).toLocaleDateString()}</Text>
@@ -135,6 +155,7 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
     </View>
   );
 };
+
 const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) => {
   const [timetable, setTimetable] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,7 +163,6 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
   const { width } = useWindowDimensions();
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
 
-  /* ================= FETCH ================= */
   useEffect(() => {
     const fetchTT = async () => {
       try {
@@ -150,21 +170,11 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
 
         const url = `http://162.215.210.38:3010/api/parent-timetable?class_id=${encodeURIComponent(studentData.class_name)}&section_id=${encodeURIComponent(studentData.section)}&schoolCode=${encodeURIComponent(studentData.schoolCode)}`;
 
-        console.log('🌐 Fetching timetable:', url);
-
         const res = await axios.get(url);
         const data = res.data.timetable || [];
 
-        console.log(
-          '📅 Days from API:',
-          data.map((d: any) => d.day)
-        );
-
-        /* ========== 🔥 KEEP LAST ENTRY PER DAY ========== */
         const dayMap: any = {};
-
         data.forEach((item: any) => {
-          // 👇 overwrites previous same-day data
           dayMap[item.day] = {
             day: item.day,
             periods: item.periods || {
@@ -177,47 +187,22 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
         });
 
         const uniqueDays = Object.values(dayMap);
-
-        /* ========== SORT DAYS ========== */
-        const daysOrder = [
-          'Monday',
-          'Tuesday',
-          'Wednesday',
-          'Thursday',
-          'Friday',
-          'Saturday',
-        ];
-
-        const sortedData = uniqueDays.sort(
-          (a: any, b: any) =>
-            daysOrder.indexOf(a.day) - daysOrder.indexOf(b.day)
-        );
-
+        const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const sortedData = uniqueDays.sort((a: any, b: any) => daysOrder.indexOf(a.day) - daysOrder.indexOf(b.day));
         setTimetable(sortedData);
-      } 
-    catch {
-  showError(
-    'Timetable Error',
-    'Unable to load timetable. Please try again.'
-  );
-}
-
-      
-      finally {
+      } catch (error) {
+        console.error('Timetable fetch error:', error);
+        showError('Timetable Error', 'Unable to load timetable. Please try again.');
+      } finally {
         setLoading(false);
       }
     };
-
     fetchTT();
   }, [studentData]);
 
   if (loading) {
-    return (
-      <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />
-    );
+    return <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />;
   }
-
-  /* ================= HELPERS ================= */
 
   const getSortedPeriods = (row: any) => {
     const allPeriods = [
@@ -226,33 +211,20 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
       ...(row.periods?.evening || []),
       ...(row.periods?.night || []),
     ];
-
-    // safety dedupe (optional)
     const uniqueMap = new Map();
     allPeriods.forEach((p: any) => {
       const key = `${p.fromTime}-${p.toTime}-${p.subject}`;
       if (!uniqueMap.has(key)) uniqueMap.set(key, p);
     });
-
-    return Array.from(uniqueMap.values()).sort((a, b) =>
-      a.fromTime.localeCompare(b.fromTime)
-    );
+    return Array.from(uniqueMap.values()).sort((a, b) => a.fromTime.localeCompare(b.fromTime));
   };
 
-  const maxPeriods = Math.max(
-    ...timetable.map(row => getSortedPeriods(row).length),
-    0
-  );
+  const maxPeriods = Math.max(...timetable.map(row => getSortedPeriods(row).length), 0);
   const rowLabelWidth = 88;
   const dayCellMinWidth =
     timetable.length > 0
-      ? Math.max(
-          96,
-          Math.floor((phoneWidth - rowLabelWidth - 56) / Math.min(timetable.length, 5)),
-        )
+      ? Math.max(96, Math.floor((phoneWidth - rowLabelWidth - 56) / Math.min(timetable.length, 5)))
       : 110;
-
-  /* ================= RENDER ================= */
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
@@ -301,11 +273,6 @@ const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) =>
   );
 };
 
-
-
-
-
-
 /* ---------------- MAIN SCREEN ---------------- */
 
 const ParentHomework: React.FC<
@@ -318,7 +285,6 @@ const ParentHomework: React.FC<
   const phoneHeight = Math.min(Math.max(height - 24, 720), 860);
   const appStyles = createAppStyles({ phoneWidth, phoneHeight });
 
-  // 1. Load basic student data
   useEffect(() => {
     const loadStudent = async () => {
       try {
@@ -330,22 +296,14 @@ const ParentHomework: React.FC<
         const required = ['studentId', 'name', 'class_name', 'section', 'schoolCode'];
         const missing = required.filter(k => !data[k]);
         if (missing.length > 0) {
-          showError(
-            'Student Data Missing',
-            'Please select student again in Parent Details.'
-          );
+          showError('Student Data Missing', 'Please select student again in Parent Details.');
           return;
         }
-
         setStudentData(data);
+      } catch (error) {
+        console.error('Storage error:', error);
+        showError('Storage Error', 'Unable to load saved data. Please restart the app.');
       }
-  catch {
-  showError(
-    'Storage Error',
-    'Unable to load saved data. Please restart the app.'
-  );
-}
-
     };
     loadStudent();
   }, []);
@@ -355,8 +313,6 @@ const ParentHomework: React.FC<
       <StatusBar barStyle="dark-content" />
       <ScrollView style={styles.scrollView}>
         <View style={embedded ? [styles.container, { padding: 0, marginTop: 0 }] : styles.container}>
-         
-  
           <View style={styles.syllabusContainertwo}>
             <View
               style={[
@@ -368,14 +324,10 @@ const ParentHomework: React.FC<
             >
               {studentData ? <HomeworkTabContent studentData={studentData} /> : <ActivityIndicator size="large" color="#000" />}
             </View>
-            
           </View>
-
-     
         </View>
       </ScrollView>
       <ParentFooter embedded={embedded} />
-   
     </SafeAreaView>
   );
 };

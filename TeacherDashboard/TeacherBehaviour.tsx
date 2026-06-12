@@ -33,7 +33,7 @@ import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
 import { TouchableWithoutFeedback } from 'react-native';
 import { TeacherTimetableContext } from '../Modalcontext';
 import TeacherTimetableComponent from '../TeacherTimetableComponent';
-
+import LinearGradient from 'react-native-linear-gradient';
 /* ---------------- TYPES ---------------- */
 interface Student {
   username: string;
@@ -387,6 +387,13 @@ const availableSections = classSelected
         contentContainerStyle={ui.page}
         nestedScrollEnabled
       >
+                  <LinearGradient
+          pointerEvents="none"
+          colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+          start={{ x: 0.05, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.dashboardTopGradient}
+        >
         <View style={local.summaryRow}>
           {summaryCards.map((card, index) => (
             <TeacherSummaryCard
@@ -415,7 +422,7 @@ const availableSections = classSelected
             </TeacherSummaryCard>
           ))}
         </View>
-
+</LinearGradient>
         <View style={ui.card}>
           <Text style={ui.cardLabel}>Class and Section</Text>
           <View style={ui.classSectionRow}>

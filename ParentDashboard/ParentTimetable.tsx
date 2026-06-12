@@ -19,6 +19,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
 import { ErrorContext } from '../ErrorContext';
+import ParentFooter from './ParentFooter';
 
 const ParentTimetable: React.FC<
   NativeStackScreenProps<RootStackParamList, 'ParentTimetable'>
@@ -383,6 +384,7 @@ const ParentTimetable: React.FC<
           )}
         </View>
       </ScrollView>
+      <ParentFooter/>
     </SafeAreaView>
   );
 };

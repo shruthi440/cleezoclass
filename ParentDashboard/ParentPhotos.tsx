@@ -25,6 +25,7 @@ import { RootStackParamList } from '../types';
 import { globalStyles as baseStyles } from '../inner';
 import { createAppStyles } from '../App.styles';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import ParentFooter from './ParentFooter';
 
 const { width } = Dimensions.get('window');
 
@@ -421,6 +422,7 @@ const ParentPhotos: React.FC<
           </View>
         </View>
       </Modal>
+      <ParentFooter/>
     </SafeAreaView>
   );
 };

@@ -22,11 +22,10 @@ import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-
+import LinearGradient from 'react-native-linear-gradient';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
 import TeacherFooter from './TeacherFooter';
 import TeacherSummaryCard from './TeacherSummaryCard';
-
 type ScanData = {
   name: string;
   class_name: string;
@@ -456,6 +455,13 @@ const HandwritingScanPull: React.FC = () => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.container}>
+           <LinearGradient
+                                  pointerEvents="none"
+                                  colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                                  start={{ x: 0.05, y: 0 }}
+                                  end={{ x: 1, y: 1 }}
+                                  style={styles.dashboardTopGradient}
+                                >
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -483,7 +489,7 @@ const HandwritingScanPull: React.FC = () => {
                 </View>
               </TeacherSummaryCard>
             ))}
-          </View>
+          </View></LinearGradient>
           <View style={[styles.syllabusContainer4]}>
             <View style={styles.tabsContainer}>
               <TouchableOpacity
@@ -499,16 +505,25 @@ const HandwritingScanPull: React.FC = () => {
 <Text style={styles.submitBtnText}>Marks Retrieval</Text>              </TouchableOpacity>
             </View>
 
-            {activeTab === 'scan' && (
-              <View style={[styles.buttonRow1, {marginTop:'5%'}]}>
-                <TouchableOpacity style={styles.submitBtn1} onPress={scanFromCamera} disabled={scanning}>
-                  <Text style={styles.submitBtnText}>{scanning ? 'Scanning...' : 'Camera '}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.submitBtn1} onPress={scanFromGallery} disabled={scanning}>
-                  <Text style={styles.submitBtnText}>Gallery </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+{activeTab === 'scan' && (
+  <View style={[styles.buttonRow1, { marginTop: '5%' }]}>
+    <TouchableOpacity
+      style={styles.submitBtn1}
+      onPress={scanFromCamera}
+      disabled={scanning}
+    >
+      <Ionicons name="qr-code-outline" size={28} color="black" />
+      {scanning && <Text style={styles.submitBtnText}>Scanning...</Text>}
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.submitBtn1}
+      onPress={scanFromGallery}
+      disabled={scanning}
+    >
+      <Ionicons name="camera-outline" size={28} color="black" />
+    </TouchableOpacity>
+  </View>
+)}
 
             <ScrollView
               style={[local.formScroll, activeTab === 'scan' ? local.formScrollScan : local.formScrollPull]}
@@ -795,7 +810,7 @@ const local = StyleSheet.create({
     paddingTop: 12,
   },
   formScrollScan: {
-    maxHeight: SCREEN_HEIGHT * 0.58,
+    maxHeight: SCREEN_HEIGHT * 0.78,
   },
   formScrollPull: {
     maxHeight: SCREEN_HEIGHT * 0.44,

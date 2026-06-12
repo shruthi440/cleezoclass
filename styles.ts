@@ -633,8 +633,8 @@ export const globalStyles = StyleSheet.create({
     padding: 0,
   },
   container: {
-    padding: 6,
-    marginTop: Platform.OS === 'ios' ? 0 : 10,
+    padding: 0,
+    marginTop: Platform.OS === 'ios' ? 0 : 0,
  
   },
   modalOverlay: {
@@ -1084,7 +1084,7 @@ export const globalStyles = StyleSheet.create({
 
     // Using hp ensures the container always takes up 54% of the
     // viewable screen height across all device densities.
-    height: hp('60%'),
+    height: hp('90%'),
   },
   syllabusContainer3: {
     backgroundColor: '#FFFFFF',
@@ -1456,6 +1456,16 @@ export const attendanceStyles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
+      dashboardHeroGradientCard: {
+      position: 'relative',
+      flex: 1,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingTop: 0,
+      paddingBottom: 10,
+      height: 220,
+      overflow: 'visible',
+    },
   card: {
     borderRadius: 24,
     backgroundColor: 'transparent',

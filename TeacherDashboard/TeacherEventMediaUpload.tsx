@@ -20,7 +20,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import ticketIcon from '../icons/application.png';
 import RNFS from 'react-native-fs';
 import axios from 'axios';
-
+import LinearGradient from 'react-native-linear-gradient';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
 import TeacherFooter from './TeacherFooter';
 import TeacherSummaryCard from './TeacherSummaryCard';
@@ -164,7 +164,17 @@ const TeacherEventMediaUpload: React.FC<
       <StatusBar barStyle="dark-content" />
 
       <ScrollView style={styles.scrollView} contentContainerStyle={ui.page} showsVerticalScrollIndicator={false}>
+        
+        
         <View style={local.container}>
+
+                        <LinearGradient
+                            pointerEvents="none"
+                            colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                            start={{ x: 0.05, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.dashboardTopGradient}
+                          >
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -193,7 +203,7 @@ const TeacherEventMediaUpload: React.FC<
               </TeacherSummaryCard>
             ))}
           </View>
-
+</LinearGradient>
           <View style={ui.card}>
             <Text style={ui.cardLabel}>Upload Actions</Text>
             <View style={ui.actionsRow}>

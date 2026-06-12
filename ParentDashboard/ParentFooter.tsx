@@ -1,19 +1,15 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, ImageSourcePropType, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { RootStackParamList } from '../types';
 
 type ParentFooterProps = {
   embedded?: boolean;
 };
-export type ImageSourcePropType =
-  | ImageURISource
-  | ImageURISource[]
-  | ImageRequireSource;
-
 const logoImage = require('../assets/Cleezo.png');
 const backArrowImage: ImageSourcePropType = require('../assets/Arrow.png');
 
@@ -28,17 +24,16 @@ const ParentFooter: React.FC<ParentFooterProps> = ({ embedded = false }) => {
     <View style={styles.footer}>
       <View style={styles.footerNav}>
         <Pressable style={styles.footerNavItem} onPress={() => navigation.canGoBack() && navigation.goBack()}>
-                  <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
+          <Image source={backArrowImage} style={styles.backIcon} resizeMode="contain" />
           <Text style={styles.footerNavLabel}>Back</Text>
         </Pressable>
         <Pressable style={styles.footerNavItem} onPress={() => navigation.navigate('ParentDashboard')}>
-          <MaterialIcons name="home" size={22} color="#1F1F22" />
-          <Text style={styles.footerNavLabel}>Home</Text>
+<Ionicons name="home-outline" size={22} color="#1F1F22" />                  <Text style={styles.footerNavLabel}>Home</Text>
         </Pressable>
         <Pressable style={styles.footerAddButton} onPress={() => navigation.navigate('ParentLiveChatTicket')}>
           <MaterialIcons name="add" size={26} color="#FFFFFF" />
         </Pressable>
-        <Pressable style={styles.footerNavItem} onPress={() => navigation.navigate('ParentLiveChatTicket')}>
+        <Pressable style={styles.footerNavItem} onPress={() => navigation.navigate('ParentMessage')}>
           <MaterialIcons name="chat-bubble-outline" size={22} color="#1F1F22" />
           <Text style={styles.footerNavLabelMuted}>Chat</Text>
         </Pressable>
@@ -73,6 +68,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     minWidth: 54,
+  },
+  backIcon: {
+    width: 22,
+    height: 22,
   },
   footerNavLabel: {
     fontSize: 11,
@@ -112,8 +111,8 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   logo: {
-    width: 56,
-    height: 18,
+    width: 62,
+      height: 46,
   },
 });
 

@@ -28,7 +28,7 @@ import {
   DocumentPickerResponse,
 } from '@react-native-documents/picker';
 import { launchImageLibrary, Asset } from 'react-native-image-picker';
-
+import LinearGradient from 'react-native-linear-gradient';
 import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
 import TeacherFooter from './TeacherFooter';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
@@ -473,13 +473,15 @@ const TeacherHomework: React.FC<
       <StatusBar barStyle="dark-content" />
       <ScrollView style={local.scrollView} contentContainerStyle={local.scrollContent}>
         <View style={local.container}>
-          {dropdownLoading ? (
-            <View style={local.loadingBanner}>
-              <ActivityIndicator size="small" color="#111827" />
-              <Text style={local.loadingBannerText}>Loading class and section...</Text>
-            </View>
-          ) : null}
 
+
+                 <LinearGradient
+                        pointerEvents="none"
+                        colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
+                        start={{ x: 0.05, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.dashboardTopGradient}
+                      >
           <View style={local.summaryRow}>
             {summaryCards.map((card, index) => (
               <TeacherSummaryCard
@@ -508,6 +510,13 @@ const TeacherHomework: React.FC<
               </TeacherSummaryCard>
             ))}
           </View>
+</LinearGradient>
+          {dropdownLoading ? (
+            <View style={local.loadingBanner}>
+              <ActivityIndicator size="small" color="#111827" />
+              <Text style={local.loadingBannerText}>Loading class and section...</Text>
+            </View>
+          ) : null}
 
           <View style={ui.card}>
             <Text style={ui.cardLabel}>Class and section</Text>
@@ -668,11 +677,13 @@ const local = StyleSheet.create({
     backgroundColor: '#F4F6F8',
   },
   scrollContent: {
-    padding: 16,
+    padding: 1,
     paddingBottom: 130,
   },
   container: {
-    gap: 14,
+    padding: 0,
+    marginTop: Platform.OS === 'ios' ? 0 : 0,
+ 
   },
   summaryRow: {
     flexDirection: 'row',
@@ -687,8 +698,8 @@ const local = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },

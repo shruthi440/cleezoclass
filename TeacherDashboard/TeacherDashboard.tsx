@@ -21,6 +21,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import notifee, { AndroidImportance } from '@notifee/react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { createAppStyles } from '../App.styles';
 import {
@@ -151,7 +152,8 @@ const dashboardTilesMap: Record<string, DashboardTile[]> = {
     { label: 'Scan', subtitle: 'Scan QR code', icon: 'qr-code-scanner', kind: 'material' },
     { label: 'Salary', subtitle: 'View salary info', icon: 'payments', kind: 'material' },
     { label: 'Leave', subtitle: 'Leave requests', icon: 'event-busy', kind: 'material' },
-    { label: 'Chat', subtitle: 'Message updates', icon: 'chat', kind: 'material' },
+    { label: 'Messages', subtitle: 'Open conversations', icon: 'chat', kind: 'material' },
+    { label: 'Chat Requests', subtitle: 'Manage chat access', icon: 'forum', kind: 'material' },
     { label: 'Announcements', subtitle: 'School updates', icon: 'campaign', kind: 'material' },
     // { label: 'Student Report', icon: 'description', kind: 'material' },
   ],
@@ -432,6 +434,7 @@ type RootStackParamList = {
   TopicOfDay: TeacherDashboardParams | undefined;
   TeacherLeaveRequest: TeacherDashboardParams | undefined;
   TeacherChatAndEvents: TeacherDashboardParams | undefined;
+  TeacherMessage: TeacherDashboardParams | undefined;
   TeacherTickets: TeacherDashboardParams | undefined;
   TeacherDetails: TeacherDashboardParams | undefined;
   TeacherQuestionPaperGeneration: TeacherDashboardParams | undefined;
@@ -990,7 +993,10 @@ const TeacherDashboard = () => {
       case 'Leave':
         navigation.navigate('TeacherLeaveRequest', sharedParams);
         return;
-      case 'Chat':
+      case 'Messages':
+        navigation.navigate('TeacherMessage', sharedParams);
+        return;
+      case 'Chat Requests':
         navigation.navigate('TeacherChatAndEvents', sharedParams);
         return;
       case 'Announcements':
@@ -1019,8 +1025,8 @@ const TeacherDashboard = () => {
   };
 
   const handleOpenChat = () => {
-    setSelectedModule('Chat');
-    navigateToModule('Chat');
+    setSelectedModule('Messages');
+    navigateToModule('Messages');
   };
 
   const handleOpenProfilePanel = () => {
@@ -1150,7 +1156,7 @@ const TeacherDashboard = () => {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="light-content" backgroundColor="#0E0E0F" />
+      <StatusBar barStyle="light-content" backgroundColor={"#0a3d62"} />
 
       <View style={styles.background}>
         <View style={styles.phoneShell}>
@@ -1286,7 +1292,7 @@ const TeacherDashboard = () => {
                       </View>
                     </View>
                     <Animated.Image
-                      source={require('../assets/leaves.png')}
+                      source={require('../assets/timetable.jpg')}
                       style={[
                         styles.parentActionImage,
                         {
@@ -1592,8 +1598,7 @@ const TeacherDashboard = () => {
                   <Text style={styles.footerNavLabel}>Back</Text>
                 </Pressable>
                 <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
-                  <MaterialIcons name="home" size={22} color="#1F1F22" />
-                  <Text style={styles.footerNavLabel}>Home</Text>
+<Ionicons name="home-outline" size={22} color="#1F1F22" />                  <Text style={styles.footerNavLabel}>Home</Text>
                 </Pressable>
                 <Pressable style={styles.footerAddButton} onPress={handleAddPress}>
                   <MaterialIcons name="add" size={26} color="#FFFFFF" />

@@ -14,6 +14,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import ParentFooter from './ParentDashboard/ParentFooter';
 
 const API_BASE_URL = 'http://162.215.210.38:3010/api';
 
@@ -190,6 +191,7 @@ const AnnouncementList: React.FC<AnnouncementListProps> = ({ audience }) => {
           </View>
         )}
       </ScrollView>
+      <ParentFooter />
     </SafeAreaView>
   );
 };

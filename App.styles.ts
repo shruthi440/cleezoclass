@@ -2886,8 +2886,8 @@ export const createAppStyles = ({ phoneWidth, phoneHeight: _phoneHeight }: AppLa
       marginRight: 4,
     },
     logo: {
-      width: 42,
-      height: 26,
+      width: 62,
+      height: 46,
     },
     footerBrandRow: {
       flexDirection: 'row',

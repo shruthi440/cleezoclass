@@ -22,6 +22,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { BarChart } from 'react-native-chart-kit';
 import LinearGradient from 'react-native-linear-gradient';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
@@ -35,6 +36,7 @@ import ParentPhotos from './ParentPhotos';
 import ParentLiveChatTicket from './ParentLiveChatTicket';
 import ParentHomepage from './parentEvents';
 import ParentAnnouncements from './ParentAnnouncements';
+import ParentMessage from './parent_msg';
 
 const ParentHomeworkView = ParentHomework as unknown as React.ComponentType<any>;
 const ParentAcademicView = ParentAcademic as unknown as React.ComponentType<any>;
@@ -57,6 +59,7 @@ type ParentModuleRoute =
   | 'ParentCalender'
   | 'ParentPhotos'
   | 'ParentLiveChatTicket'
+  | 'ParentMessage'
   | 'ParentHomepage'
   | 'ParentAnnouncements';
 
@@ -228,6 +231,14 @@ const buildFeeKeyVariants = (value: string) => {
   return Array.from(variants).filter(Boolean);
 };
 
+const formatFeeLabel = (key: string) =>
+  String(key || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .replace(/\bFees\b/g, 'Fee')
+    .trim();
+
 const toFeeNumber = (value: any) => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   if (typeof value === 'string') {
@@ -262,10 +273,16 @@ const mergeFeeData = (classFeeData: Record<string, any> | null, studentFeeData: 
   return merged;
 };
 
+const isStudentScopedFee = (scope?: string) =>
+  /student|individual|personal|per\s*student/i.test(String(scope || ''));
+
+const isClassScopedFee = (scope?: string) =>
+  /class|section|batch|group/i.test(String(scope || ''));
+
 const buildFeeRowsFromSource = (
   paymentSource: Record<string, any> | null,
   amountSource: Record<string, any> | null,
-  dynamicFeeTypes: Array<{ feeName?: string; feesType?: string; columnBase?: string }> = [],
+  dynamicFeeTypes: Array<{ feeName?: string; feesType?: string; columnBase?: string; scope?: string }> = [],
 ) => {
   if (!paymentSource && !amountSource) return [];
 
@@ -274,76 +291,25 @@ const buildFeeRowsFromSource = (
   const paymentLookup = new Map<string, any>(paymentEntries);
   const amountLookup = new Map<string, any>(amountEntries);
 
-  const findFirstValue = (keys: string[]) => {
+  const exactLookup = (keys: string[], lookups: Array<Map<string, any>>) => {
     for (const key of keys) {
-      const sourceLookup = keys.some((k) => /paid|discount|due/i.test(k)) ? paymentLookup : amountLookup;
       const variants = buildFeeKeyVariants(key);
-
-      for (const variant of variants) {
-        if (!sourceLookup.has(variant)) continue;
-        const numeric = toFeeNumber(sourceLookup.get(variant));
-        if (numeric || sourceLookup.get(variant) === 0) return numeric;
-      }
-
-      for (const [candidateKey, candidateValue] of sourceLookup.entries()) {
-        const candidate = normalizeFeeKey(candidateKey);
-        if (!candidate) continue;
-        if (
-          variants.some(
-            (variant) =>
-              candidate === variant ||
-              candidate.includes(variant) ||
-              variant.includes(candidate)
-          )
-        ) {
-          const numeric = toFeeNumber(candidateValue);
-          if (numeric || candidateValue === 0) return numeric;
-        }
-      }
-    }
-    return 0;
-  };
-
-  const findBestAmountValue = (keys: string[]) => {
-    const lookups = [paymentLookup, amountLookup];
-
-    for (const lookup of lookups) {
-      const exactMatches: number[] = [];
-      const fuzzyMatches: number[] = [];
-
-      for (const key of keys) {
-        const variants = buildFeeKeyVariants(key);
-
+      for (const sourceLookup of lookups) {
         for (const variant of variants) {
-          if (lookup.has(variant)) {
-            const numeric = toFeeNumber(lookup.get(variant));
-            if (numeric || lookup.get(variant) === 0) exactMatches.push(numeric);
-          }
-        }
-
-        for (const [candidateKey, candidateValue] of lookup.entries()) {
-          const candidate = normalizeFeeKey(candidateKey);
-          if (!candidate) continue;
-          if (
-            variants.some(
-              (variant) =>
-                candidate === variant ||
-                candidate.includes(variant) ||
-                variant.includes(candidate)
-            )
-          ) {
-            const numeric = toFeeNumber(candidateValue);
-            if (numeric || candidateValue === 0) fuzzyMatches.push(numeric);
-          }
+          if (!sourceLookup.has(variant)) continue;
+          const numeric = toFeeNumber(sourceLookup.get(variant));
+          if (numeric || sourceLookup.get(variant) === 0) return numeric;
         }
       }
-
-      if (exactMatches.length) return Math.max(...exactMatches);
-      if (fuzzyMatches.length) return Math.max(...fuzzyMatches);
     }
-
     return 0;
   };
+
+  const findFirstValue = (keys: string[], lookups: Array<Map<string, any>> = [paymentLookup, amountLookup]) =>
+    exactLookup(keys, lookups);
+
+  const findBestAmountValue = (keys: string[], lookups: Array<Map<string, any>> = [amountLookup, paymentLookup]) =>
+    exactLookup(keys, lookups);
 
   const rows: Array<{ label: string; amount: number; paid: number; discount: number; due: number }> = [];
   const seen = new Set<string>();
@@ -356,7 +322,7 @@ const buildFeeRowsFromSource = (
     rows.push({ label, amount, paid, discount, due });
   };
 
-  const dynamicTypesByBase = new Map<string, { feeName?: string; feesType?: string; columnBase?: string }>();
+  const dynamicTypesByBase = new Map<string, { feeName?: string; feesType?: string; columnBase?: string; scope?: string }>();
   dynamicFeeTypes.forEach((item) => {
     const label = String(item?.feeName || item?.feesType || '').trim();
     const base = normalizeFeeKey(item?.columnBase || label);
@@ -365,15 +331,28 @@ const buildFeeRowsFromSource = (
 
   dynamicTypesByBase.forEach((item, base) => {
     const label = String(item?.feeName || item?.feesType || base).trim();
-    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label]);
-    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`]);
-    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`]);
-    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`]);
-    const finalLabel = String(label || base).trim();
+    const scope = String(item?.scope || '').trim();
+    const amountLookups = isStudentScopedFee(scope)
+      ? [paymentLookup, amountLookup]
+      : isClassScopedFee(scope)
+      ? [amountLookup, paymentLookup]
+      : [amountLookup, paymentLookup];
+    const amount = findBestAmountValue([base, `${base}_fee`, `${base}_fees`, `${base}_amount`, label], amountLookups);
+    const paid = findFirstValue([`${base}_paid`, `${base}Paid`, `${label}_paid`, `${label}Paid`], [paymentLookup, amountLookup]);
+    const discount = findFirstValue([`${base}_discount`, `${base}Discount`, `${label}_discount`, `${label}Discount`], [paymentLookup, amountLookup]);
+    const due = findFirstValue([`${base}_due`, `${base}Due`, `${label}_due`, `${label}Due`], [paymentLookup, amountLookup]);
+    const finalLabel = formatFeeLabel(label || base);
     addRow(finalLabel, amount, paid, discount);
-    if (due > 0 && amount <= 0 && seen.has(normalizeFeeKey(finalLabel))) {
+    if (seen.has(normalizeFeeKey(finalLabel))) {
       const existing = rows.find((row) => normalizeFeeKey(row.label) === normalizeFeeKey(finalLabel));
-      if (existing) existing.due = due;
+      if (existing) {
+        if (existing.amount > 0) {
+          existing.due = Math.max(existing.amount - existing.paid - existing.discount, 0);
+        } else if (due > 0) {
+          existing.amount = Math.max(existing.amount, existing.paid + existing.discount + due);
+          existing.due = due;
+        }
+      }
     }
   });
 
@@ -480,6 +459,19 @@ const parentTiles: ParentTile[] = [
     iconBg: '#FFFFFF',
     cardBg: '#FFFFFF',
     metaLabel: 'Gallery',
+    metaValue: '',
+  },
+  {
+    label: 'Messages',
+    icon: 'message',
+    kind: 'material',
+    route: 'ParentMessage',
+    component: ParentMessage,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Chat',
     metaValue: '',
   },
   {
@@ -896,12 +888,15 @@ const ParentDashboard = () => {
         (await AsyncStorage.getItem('studentId')) ||
         '';
 
-      const [academicRes, studentFeeRes, classRes, paymentRes, dynamicRowsRes, feeStructureRes, dynamicFeeTypesRes] = await Promise.allSettled([
+      const [academicRes, feeApiRes, studentFeeRes, classRes, paymentRes, dynamicRowsRes, feeStructureRes, dynamicFeeTypesRes] = await Promise.allSettled([
         axios.post('https://cleezoclass.com:4000/api/overall/academic-performance', {
           name: activeStudent.name,
           class_name: activeStudent.class_name,
           section: activeStudent.section,
           schoolCode: activeStudent.schoolCode,
+        }),
+        axios.get(`https://cleezoclass.com:4000/api/fees/${encodeURIComponent(String(activeStudent.username || ''))}`, {
+          params: { schoolCode: activeStudent.schoolCode },
         }),
         axios.post('https://cleezoclass.com:4000/api/studentFees', {
           studentId,
@@ -946,16 +941,11 @@ const ParentDashboard = () => {
       const testTypes = Array.isArray(academicData?.testTypes) ? academicData.testTypes : [];
       setAcademicSummary(computeAcademicSummary(performance, testTypes));
 
-      const studentFeePayload =
-        studentFeeRes.status === 'fulfilled'
-          ? studentFeeRes.value.data?.data || {}
-          : {};
+      const feeApiPayload = feeApiRes.status === 'fulfilled' ? feeApiRes.value.data?.data || {} : {};
       const studentFeeData =
         studentFeeRes.status === 'fulfilled'
           ? studentFeeRes.value.data?.feeDetails || studentFeeRes.value.data?.feeDetail || {}
           : {};
-      const classFeeData =
-        classRes.status === 'fulfilled' ? classRes.value.data?.feeDetail || {} : {};
       const paymentPayload =
         paymentRes.status === 'fulfilled' ? paymentRes.value.data?.payments || {} : {};
       const feeStructureData =
@@ -966,33 +956,46 @@ const ParentDashboard = () => {
         classRes.status === 'fulfilled'
           ? classRes.value.data?.feeDetail || classRes.value.data?.feeStructure || {}
           : {};
-      const dynamicFeeTypes = dynamicFeeTypesRes.status === 'fulfilled'
+      const dynamicFeeTypes = (dynamicFeeTypesRes.status === 'fulfilled'
         ? Array.isArray(dynamicFeeTypesRes.value.data?.data)
           ? dynamicFeeTypesRes.value.data.data
           : Array.isArray(dynamicFeeTypesRes.value.data)
           ? dynamicFeeTypesRes.value.data
           : []
-        : [];
+        : [])
+        .filter((item: Record<string, any>) => String(item?.feeName || item?.feesType || '').trim() !== '')
+        .map((item: Record<string, any>) => ({
+          id: item?.id,
+          feeName: item?.feeName || '',
+          feesType: item?.feesType || 'Custom Fee',
+          scope: item?.scope || 'All',
+          frequency: item?.frequency || 'One time',
+          installments: item?.installments || 1,
+          columnBase: normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || ''),
+        }));
       const dynamicRows =
         dynamicRowsRes.status === 'fulfilled' && Array.isArray(dynamicRowsRes.value.data)
           ? dynamicRowsRes.value.data
           : [];
 
-      const routeFeeData = {
-        ...(studentFeePayload || {}),
-        ...(studentFeePayload?.studentFeeDetails || {}),
+      const paymentDetails = {
+        ...(paymentPayload || {}),
+        ...(feeApiPayload || {}),
+        ...(feeApiPayload?.studentFeeDetails || {}),
+        ...(studentFeeData || {}),
+        ...(paymentPayload?.discounts || {}),
       };
 
       const paymentSource = {
-        ...(paymentPayload || {}),
-        ...(paymentPayload?.discounts || {}),
+        ...(paymentDetails || {}),
+        ...(paymentDetails?.discounts || {}),
       };
-      Object.entries(paymentPayload?.dynamicFeeTotals || {}).forEach(([key, value]) => {
+      Object.entries(paymentDetails?.dynamicFeeTotals || {}).forEach(([key, value]) => {
         const normalized = normalizeFeeKey(key);
         if (!normalized) return;
         paymentSource[normalized] = value;
       });
-      (Array.isArray(paymentPayload?.feeBreakdown) ? paymentPayload.feeBreakdown : []).forEach((row: any) => {
+      (Array.isArray(paymentDetails?.feeBreakdown) ? paymentDetails.feeBreakdown : []).forEach((row: any) => {
         const label = String(row?.label || row?.key || '').trim();
         const normalized = normalizeFeeKey(label);
         if (!normalized) return;
@@ -1007,8 +1010,16 @@ const ParentDashboard = () => {
         Object.keys(feeStructureData || {}).length ? feeStructureData : fallbackClassFeeData || null,
         dynamicFeeTypes
       );
+      const allowedLabels = new Set(
+        dynamicFeeTypes
+          .map((item: { columnBase?: string; feeName?: string; feesType?: string }) =>
+            normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || '')
+          )
+          .filter(Boolean)
+      );
+      const filteredFeeRows = feeRows.filter((row) => allowedLabels.size === 0 || allowedLabels.has(normalizeFeeKey(row.label)));
       const summaryRows = feeRows.length
-        ? feeRows
+        ? filteredFeeRows
         : dynamicRows.length
         ? dynamicRows.map((row: any) => ({
             amount: Number(row?.CompleteFee || row?.completeFee || row?.Final_Amount || row?.Total_Amount || row?.totalAmount || 0),
@@ -1193,7 +1204,9 @@ const ParentDashboard = () => {
       case 'Attendance':
         return parentTiles.filter((tile) => tile.route === 'ParentAttendance');
       case 'Support':
-        return parentTiles.filter((tile) => tile.route === 'ParentLiveChatTicket');
+        return parentTiles.filter(
+          (tile) => tile.route === 'ParentMessage' || tile.route === 'ParentLiveChatTicket'
+        );
       case 'Events':
         return parentTiles.filter(
           (tile) =>
@@ -1215,6 +1228,7 @@ const ParentDashboard = () => {
       'ParentTimetable',
       'ParentCalender',
       'ParentPhotos',
+      'ParentMessage',
       'ParentLiveChatTicket',
       'ParentHomepage',
       'ParentAnnouncements',
@@ -1237,7 +1251,7 @@ const ParentDashboard = () => {
           case 'Attendance':
             return tile.route === 'ParentAttendance';
           case 'Support':
-            return tile.route === 'ParentLiveChatTicket';
+            return tile.route === 'ParentMessage' || tile.route === 'ParentLiveChatTicket';
           case 'Events':
             return (
               tile.route === 'ParentHomepage' ||
@@ -1322,6 +1336,14 @@ const ParentDashboard = () => {
             ...tile,
             metaLabel: 'Gallery',
             metaValue: 'Latest photos',
+          };
+        }
+
+        if (tile.route === 'ParentMessage') {
+          return {
+            ...tile,
+            metaLabel: 'Chat',
+            metaValue: 'Open messages',
           };
         }
 
@@ -1467,7 +1489,7 @@ const ParentDashboard = () => {
   };
 
   const handleOpenChat = () => {
-    openModule('ParentLiveChatTicket');
+    openModule('ParentMessage');
   };
 
   const handleOpenProfilePanel = () => {
@@ -1845,7 +1867,6 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
               </View> */}
 
               <View style={styles.parentActionSection}>
-                <Text style={styles.parentActionTitle}>Quick Actions</Text>
                 <ScrollView
                   horizontal
                   nestedScrollEnabled
@@ -1937,12 +1958,6 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
                 </ScrollView>
               </View>
 
-              <View style={{ marginBottom: 10, paddingHorizontal: 5, paddingVertical: 5 }}>
-                <Text style={styles.sectionTitle}>Parent Dashboard</Text>
-                <Text style={{ color: '#68686D', fontSize: 13, marginTop: -6, marginBottom: 8 }}>
-                  {selectedSummary}
-                </Text>
-              </View>
 
               <View style={styles.dashboardGrid}>
                 {dashboardTiles.map((tile) => {
@@ -2206,8 +2221,7 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
                   <Text style={styles.footerNavLabel}>Back</Text>
                 </Pressable>
                 <Pressable style={styles.footerNavItem} onPress={handleOpenHomePanel}>
-                  <MaterialIcons name="home" size={22} color="#000000" />
-                  <Text style={styles.footerNavLabel}>Home</Text>
+<Ionicons name="home-outline" size={22} color="#1F1F22" />                  <Text style={styles.footerNavLabel}>Home</Text>
                 </Pressable>
                 <Pressable style={styles.footerAddButton} onPress={handleAddPress}>
                   <MaterialIcons name="add" size={26} color="#FFFFFF" />
