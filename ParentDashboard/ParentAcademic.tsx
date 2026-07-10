@@ -673,22 +673,30 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
                   <Text style={styles.subjectTitle}>
                     {getSubjectDisplayName(subject, index)}
                   </Text>
-                  <View style={styles.rowHeader}>
-                    {termRowsForSummary.map((row: any) => (
-                      <Text key={row.key} style={styles.cellHeader}>
-                        {row.label}
-                      </Text>
-                    ))}
-                  </View>
-                  <View style={styles.rowData}>
-                    {termRowsForSummary.map((row: any) => (
-                      <View key={row.key} style={styles.cell}>
-                        <Text style={styles.cellText}>
-                          {String(getDisplayMark(subject, row))}
-                        </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={true}
+                    contentContainerStyle={styles.subjectMarksScrollContent}
+                  >
+                    <View style={styles.subjectMarksTable}>
+                      <View style={styles.rowHeader}>
+                        {termRowsForSummary.map((row: any) => (
+                          <Text key={row.key} style={styles.cellHeader}>
+                            {row.label}
+                          </Text>
+                        ))}
                       </View>
-                    ))}
-                  </View>
+                      <View style={styles.rowData}>
+                        {termRowsForSummary.map((row: any) => (
+                          <View key={row.key} style={styles.cell}>
+                            <Text style={styles.cellText}>
+                              {String(getDisplayMark(subject, row))}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  </ScrollView>
                 </View>
               ))
             ) : selectedSubjectRow ? (
@@ -744,7 +752,6 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
         </View>
       )}
 
-      <ParentFooter embedded={embedded} />
     </View>
   );
 
@@ -754,6 +761,8 @@ const ParentAcademic: React.FC<AcademicViewProps> = ({
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0D3F66" translucent={false} />
       {content}
+            <ParentFooter embedded={embedded} />
+
     </SafeAreaView>
   );
 };
@@ -1041,17 +1050,19 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 999,
   },
+  subjectMarksScrollContent: { paddingBottom: 4 },
+  subjectMarksTable: { minWidth: 420 },
   rowHeader: { flexDirection: 'row', marginBottom: 8 },
   rowData: { flexDirection: 'row' },
   cellHeader: {
-    flex: 1,
+    width: 88,
     textAlign: 'center',
     fontSize: 11,
     color: '#666',
     fontWeight: '700',   
   },
   cell: {
-    flex: 1,
+    width: 88,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 10,

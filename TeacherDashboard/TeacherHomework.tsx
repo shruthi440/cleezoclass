@@ -33,6 +33,7 @@ import { buildTeacherDayPeriods, useNextClass } from '../NextClassContext';
 import TeacherFooter from './TeacherFooter';
 import { globalStyles as styles, attendanceStyles as ui } from '../teacherStyles';
 import TeacherSummaryCard from './TeacherSummaryCard';
+import ticketIcon from '../icons/application.png';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const API_BASE = 'http://162.215.210.38:3010/api';
@@ -559,7 +560,7 @@ const TeacherHomework: React.FC<
             <Text style={ui.cardLabel}>Upload tools</Text>
             <View style={ui.actionsRow}>
               <TouchableOpacity
-                style={[ui.primaryButton, { flex: 1 }]}
+                 style={[styles.messageBtnTall, { marginLeft: 0 }]}
                 onPress={openUploadOptions}
                 disabled={isUploading}
               >
@@ -567,10 +568,9 @@ const TeacherHomework: React.FC<
                   {isUploading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Ionicons name="cloud-upload-outline" size={20} color="#000" />
-                  )}
+ <Image source={ticketIcon} style={[styles.iconImage, { tintColor: '#0a3d62' }]} />                  )}
                   <Text style={ui.primaryButtonText}>
-                    {isUploading ? 'Uploading...' : 'Hw Upload'}
+                    {isUploading ? 'Uploading...' : ''}
                   </Text>
                 </View>
               </TouchableOpacity>

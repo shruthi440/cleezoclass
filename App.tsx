@@ -10,7 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import messaging from '@react-native-firebase/messaging';
 import { getApps } from '@react-native-firebase/app';
 import notifee, { AndroidImportance } from '@notifee/react-native';
-
+import { Alert, Linking } from 'react-native';
+import VersionCheck from 'react-native-version-check';
 import { ThemeProvider } from './ThemeContext';
 import { UserProvider } from './UserContext';
 import { ErrorProvider } from './ErrorContext';
@@ -43,7 +44,6 @@ import TeacherCounselling from './TeacherDashboard/Teacher_Councelling';
 import ScanPull from './TeacherDashboard/Scan&Pull';
 import TeacherModuleSummary from './TeacherDashboard/TeacherModuleSummary';
 import TeacherAnnouncements from './TeacherDashboard/TeacherAnnouncements';
-import TeacherMessage from './TeacherDashboard/teacher_msg';
 import ParentDashboard from './ParentDashboard/ParentDashboard';
 import ParentAcademic from './ParentDashboard/ParentAcademic';
 import ParentAttendance from './ParentDashboard/ParentAttendance';
@@ -55,7 +55,7 @@ import ParentPhotos from './ParentDashboard/ParentPhotos';
 import ParentLiveChatTicket from './ParentDashboard/ParentLiveChatTicket';
 import ParentHomepage from './ParentDashboard/parentEvents';
 import ParentAnnouncements from './ParentDashboard/ParentAnnouncements';
-import ParentMessage from './ParentDashboard/parent_msg';
+import ParentReports from './ParentDashboard/ParentReports';
 import AdminDashboard from './AdminDashboard';
 import ChiefDashboard from './chiefdashboard/ChiefDashboard';
 import AcademicStudent from './chiefdashboard/Chief_operation_AcademicStudent';
@@ -68,6 +68,9 @@ import ParentStudentIconManagement from './ParentDashboard/ParentDetails';
 import AccountantDashboard from './AccountantDashboard/AccountantDashboard';
 import BusManagerDashboard from './BusDashboard/BusManagerDashboard';
 import BusDriverDashboard from './BusDashboard/BusDriverDashboard';
+import TeacherMessage from './TeacherDashboard/teacher_msg';
+import ParentMessage from './ParentDashboard/parent_msg';
+import ExcelUpload from './AccountantDashboard/excelupload';
 
 type RootStackParamList = {
   TeacherLogin: undefined;
@@ -110,13 +113,13 @@ type RootStackParamList = {
   TeacherQuestionPaperGeneration: { username?: string; name?: string } | undefined;
   TeacherLeaveRequest: { username?: string; name?: string } | undefined;
   TeacherChatAndEvents: { username?: string; name?: string } | undefined;
-  TeacherMessage: { username?: string; name?: string } | undefined;
   TeacherCounselling: { username?: string; name?: string } | undefined;
   TeacherAnnouncements: { username?: string; name?: string } | undefined;
   ScanPull: undefined;
   ParentDetails: { username?: string; name?: string } | undefined;
   ParentDashboard: { username?: string; name?: string } | undefined;
   ParentAcademic: { username?: string; name?: string } | undefined;
+  ParentReports: { username?: string; name?: string } | undefined;
   ParentAttendance: { username?: string; name?: string } | undefined;
   ParentFees: { username?: string; name?: string } | undefined;
   ParentHomework: { username?: string; name?: string } | undefined;
@@ -124,7 +127,6 @@ type RootStackParamList = {
   ParentCalender: { username?: string; name?: string } | undefined;
   ParentPhotos: { username?: string; name?: string } | undefined;
   ParentLiveChatTicket: { username?: string; name?: string } | undefined;
-  ParentMessage: { username?: string; name?: string } | undefined;
   ParentHomepage: { username?: string; name?: string } | undefined;
   ParentAnnouncements: { username?: string; name?: string } | undefined;
   AdminDashboard: undefined;
@@ -257,8 +259,43 @@ const PushNotificationBootstrap = () => {
 
   return null;
 };
+const checkForUpdate = async () => {
+  try {
+    const latestVersion = await VersionCheck.getLatestVersion();
+    const currentVersion = VersionCheck.getCurrentVersion();
 
+    console.log('Current Version:', currentVersion);
+    console.log('Latest Version:', latestVersion);
+
+    const res = VersionCheck.needUpdate({
+      currentVersion,
+      latestVersion,
+    });
+
+    if (res?.isNeeded) {
+      Alert.alert(
+        'Update Available',
+        'A new version of the app is available. Please update.',
+        [
+          {
+            text: 'Update Now',
+            onPress: () =>
+              Linking.openURL(
+                'https://play.google.com/store/apps/details?id=com.cleezoclass'
+              ),
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
 const App = () => {
+    useEffect(() => {
+    checkForUpdate();
+  }, []);
   return (
     <ThemeProvider>
       <UserProvider>
@@ -323,6 +360,10 @@ const App = () => {
                     component={ParentAcademic as React.ComponentType<any>}
                   />
                   <Stack.Screen
+                    name="ParentReports"
+                    component={ParentReports as React.ComponentType<any>}
+                  />
+                  <Stack.Screen
                     name="ParentAttendance"
                     component={ParentAttendance as React.ComponentType<any>}
                   />
@@ -350,7 +391,6 @@ const App = () => {
                     name="ParentLiveChatTicket"
                     component={ParentLiveChatTicket as React.ComponentType<any>}
                   />
-                  <Stack.Screen name="ParentMessage" component={ParentMessage} />
                   <Stack.Screen
                     name="ParentHomepage"
                     component={ParentHomepage as React.ComponentType<any>}
@@ -411,7 +451,6 @@ const App = () => {
                     name="TeacherChatAndEvents"
                     component={TeacherChatAndEvents as React.ComponentType<any>}
                   />
-                  <Stack.Screen name="TeacherMessage" component={TeacherMessage} />
                   <Stack.Screen
                     name="TeacherCounselling"
                     component={TeacherCounselling as React.ComponentType<any>}
@@ -471,8 +510,18 @@ const App = () => {
                     name="ChiefAttendanceAndPayroll"
                     component={ChiefAttendanceAndPayroll as React.ComponentType<any>}
                   />
-
-                  
+ <Stack.Screen
+                    name="TeacherMessage"
+                    component={TeacherMessage as React.ComponentType<any>}
+                  />
+   <Stack.Screen
+                    name="ExcelUpload"
+                    component={ExcelUpload as React.ComponentType<any>}
+                  />
+                   <Stack.Screen
+                    name="ParentMessage"
+                    component={ParentMessage as React.ComponentType<any>}
+                  />
                 </Stack.Navigator>
               </NavigationContainer>
             </TeacherTimetableProvider>

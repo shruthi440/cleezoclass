@@ -818,12 +818,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   }, [selectedRoute, selectedRouteStops, selectedStopId]);
 
   useEffect(() => {
-    setDriverName(selectedRoute?.driverName || '');
-    setDriverExperience(selectedRoute?.driverExperience || '');
-    setVehicleNumber(selectedRoute?.vehicleNumber || '');
-  }, [selectedRoute?.id]);
-
-  useEffect(() => {
     if (!DEBUG_BUS_MANAGER) return;
 
     console.log('[BusManagerDashboard] [map] selected route snapshot', {
@@ -1523,54 +1517,20 @@ const handleSaveBusEndTime = useCallback(async () => {
         driver_name: driverName.trim(),
         driverExperience: driverExperience.trim() || null,
         driver_experience: driverExperience.trim() || null,
-        vehicleNumber: vehicleNumber.trim() || null,
-        vehicle_number: vehicleNumber.trim() || null,
       });
+      setDriverName('');
+      setDriverExperience('');
       await loadDashboard();
-      Alert.alert('Success', 'Route assignment updated successfully.');
+      Alert.alert('Success', 'Driver saved successfully.');
     } catch (error: any) {
       Alert.alert(
         'Update failed',
-        error?.response?.data?.message || 'Unable to update the route assignment.'
+        error?.response?.data?.message || 'Unable to save the driver name.'
       );
     } finally {
       setSaving(false);
     }
-  }, [driverExperience, driverName, loadDashboard, schoolCode, selectedRoute, saving, vehicleNumber]);
-
-  const handleDeleteRoute = useCallback(() => {
-    if (!selectedRoute || saving) return;
-
-    Alert.alert(
-      'Delete route?',
-      `Delete “${selectedRoute.routeName}”? Its stops and student assignments may also be removed. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setSaving(true);
-              await axios.delete(`${API_BASE}/bus-manager/routes/${selectedRoute.id}`, {
-                data: { schoolCode },
-              });
-              setSelectedRouteId(null);
-              await loadDashboard();
-              Alert.alert('Route deleted', `${selectedRoute.routeName} was deleted successfully.`);
-            } catch (error: any) {
-              Alert.alert(
-                'Delete failed',
-                error?.response?.data?.message || 'Unable to delete this route.'
-              );
-            } finally {
-              setSaving(false);
-            }
-          },
-        },
-      ]
-    );
-  }, [loadDashboard, schoolCode, selectedRoute, saving]);
+  }, [driverExperience, driverName, loadDashboard, schoolCode, selectedRoute, saving]);
 
   const handleAddRoute = useCallback(async () => {
     if (saving) return;
@@ -2238,24 +2198,6 @@ const handleSaveBusEndTime = useCallback(async () => {
                       <Text style={localStyles.summaryLine}>
                         Stops: {selectedRouteStops.length}
                       </Text>
-                      <View style={localStyles.routeActionRow}>
-                        <TouchableOpacity
-                          style={[localStyles.editRouteButton, saving && localStyles.buttonDisabled]}
-                          onPress={() => setActiveSection('driver')}
-                          disabled={saving}
-                        >
-                          <Ionicons name="create-outline" size={17} color="#FFFFFF" />
-                          <Text style={localStyles.routeActionButtonText}>Edit assignment</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[localStyles.deleteRouteButton, saving && localStyles.buttonDisabled]}
-                          onPress={handleDeleteRoute}
-                          disabled={saving}
-                        >
-                          <Ionicons name="trash-outline" size={17} color="#FFFFFF" />
-                          <Text style={localStyles.routeActionButtonText}>Delete route</Text>
-                        </TouchableOpacity>
-                      </View>
                       <TouchableOpacity
                         style={localStyles.eligibleStudentsButton}
                         onPress={() => setShowEligibleStudentsPage(true)}
@@ -2446,42 +2388,34 @@ const handleSaveBusEndTime = useCallback(async () => {
                 </View>
               ) : null}
 
-             {activeSection === 'driver' ? (
-  <View style={[localStyles.cardPanelHalf, stackFormCards && localStyles.cardPanelFull]}>
-    <Text style={localStyles.cardPanelTitle}>Driver & Vehicle</Text>
-    <TextInput
-      value={driverName}
-      onChangeText={setDriverName}
-      placeholder="Driver name"
-      placeholderTextColor="#8C97A4"
-      style={localStyles.input}
-      editable={!saving}
-    />
-    <TextInput
-      value={driverExperience}
-      onChangeText={setDriverExperience}
-      placeholder="Experience (e.g. 5 years)"
-      placeholderTextColor="#8C97A4"
-      style={localStyles.input}
-      editable={!saving}
-    />
-    <TextInput
-      value={vehicleNumber}
-      onChangeText={setVehicleNumber}
-      placeholder="Vehicle number (e.g. TN 01 AB 1234)"
-      placeholderTextColor="#8C97A4"
-      style={localStyles.input}
-      editable={!saving}
-    />
-    <TouchableOpacity
-      style={[localStyles.primaryButton, saving && localStyles.buttonDisabled]}
-      onPress={handleAssignDriver}
-      disabled={saving}
-    >
-      <Text style={localStyles.primaryButtonText}>Update Driver & Vehicle</Text>
-    </TouchableOpacity>
-  </View>
-) : null}
+              {activeSection === 'driver' ? (
+                <View style={[localStyles.cardPanelHalf, stackFormCards && localStyles.cardPanelFull]}>
+                  <Text style={localStyles.cardPanelTitle}>Driver</Text>
+                  <TextInput
+                    value={driverName}
+                    onChangeText={setDriverName}
+                    placeholder="Driver name"
+                    placeholderTextColor="#8C97A4"
+                    style={localStyles.input}
+                    editable={!saving}
+                  />
+                  <TextInput
+                    value={driverExperience}
+                    onChangeText={setDriverExperience}
+                    placeholder="Experience (e.g. 5 years)"
+                    placeholderTextColor="#8C97A4"
+                    style={localStyles.input}
+                    editable={!saving}
+                  />
+                  <TouchableOpacity
+                    style={[localStyles.primaryButton, saving && localStyles.buttonDisabled]}
+                    onPress={handleAssignDriver}
+                    disabled={saving}
+                  >
+                    <Text style={localStyles.primaryButtonText}>Save Driver</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 {activeSection === 'startTime' ? (
   <View style={localStyles.cardPanel}>
     <Text style={localStyles.cardPanelTitle}>Starting Time</Text>
@@ -3317,39 +3251,6 @@ const localStyles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: '#E1E4EA',
-  },
-  routeActionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-    marginBottom: 2,
-  },
-  editRouteButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: '#6826DF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 10,
-  },
-  deleteRouteButton: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: '#C43D4B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 10,
-  },
-  routeActionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
   },
   summaryTitle: {
     color: '#131313',

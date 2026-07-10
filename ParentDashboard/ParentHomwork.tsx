@@ -37,64 +37,51 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
   const [loading, setLoading] = useState(true);
   const { showError } = useContext(ErrorContext);
 
-  // Request storage permission for Android
-  const requestStoragePermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          {
-            title: 'Storage Permission',
-            message: 'App needs access to storage to open files.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        console.warn('Storage permission error:', err);
-        return false;
-      }
-    }
-    return true;
-  };
-
-  const openHomeworkFile = async (item: any) => {
+const openHomeworkFile = async (item: any) => {
+    console.log('DEBUG: Attempting to open file for item ID:', item.id);
+    
     try {
       if (!item?.homework_file) {
-        Alert.alert('No file', 'No document found for this homework.');
+        console.error('DEBUG: No homework_file found in item object.');
+        Alert.alert('No file', 'No document found.');
         return;
       }
 
-      // Request permission for Android
-      const hasPermission = await requestStoragePermission();
-      if (!hasPermission) {
-        Alert.alert('Permission Denied', 'Storage permission is required to open files.');
-        return;
-      }
+      // Determine extension
+      const ext = item.file_type?.toLowerCase().includes('pdf') ? 'pdf' : 'jpg';
+      
+      // Clean the base64 string
+      const base64Data = item.homework_file.includes('base64,') 
+        ? item.homework_file.split(',')[1] 
+        : item.homework_file;
 
-      // Determine file extension
-      const ext = item.file_type?.includes('pdf')
-        ? 'pdf'
-        : item.file_type?.includes('png')
-        ? 'png'
-        : item.file_type?.includes('jpeg') || item.file_type?.includes('jpg')
-        ? 'jpg'
-        : 'bin';
-
-      // Save file locally
       const localPath = `${RNFS.CachesDirectoryPath}/parent_hw_${item.id || Date.now()}.${ext}`;
-      await RNFS.writeFile(localPath, item.homework_file, 'base64');
+      console.log('DEBUG: Attempting to write file to:', localPath);
 
-      // Open file directly in a native viewer
-      await FileViewer.open(localPath, { showOpenWithDialog: true });
-    } catch (e) {
-      console.error('Error opening file:', e);
-      Alert.alert('Error', 'Unable to open this file. Please try again.');
+      // Write file
+      await RNFS.writeFile(localPath, base64Data, 'base64');
+      
+      // Verify file existence
+      const exists = await RNFS.exists(localPath);
+      console.log('DEBUG: Does file exist at path?', exists);
+
+      if (exists) {
+        // Attempt to open
+        console.log('DEBUG: Calling FileViewer.open...');
+        await FileViewer.open(localPath, { 
+          showOpenWithDialog: true,
+          showAppsSuggestions: true 
+        });
+        console.log('DEBUG: FileViewer.open success');
+      } else {
+        console.error('DEBUG: File verification failed. File does not exist.');
+        Alert.alert('Error', 'File could not be saved.');
+      }
+    } catch (e: any) {
+      console.error('DEBUG: Final catch block error:', e);
+      Alert.alert('Error', 'Unable to open this file: ' + (e.message || 'Unknown error'));
     }
   };
-
   useEffect(() => {
     const fetchHomework = async () => {
       try {
@@ -153,123 +140,6 @@ const HomeworkTabContent: React.FC<{ studentData: any }> = ({ studentData }) => 
         </View>
       ))}
     </View>
-  );
-};
-
-const TimetableTabContent: React.FC<{ studentData: any }> = ({ studentData }) => {
-  const [timetable, setTimetable] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { showError } = useContext(ErrorContext);
-  const { width } = useWindowDimensions();
-  const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
-
-  useEffect(() => {
-    const fetchTT = async () => {
-      try {
-        if (!studentData?.class_name || !studentData?.section || !studentData?.schoolCode) return;
-
-        const url = `http://162.215.210.38:3010/api/parent-timetable?class_id=${encodeURIComponent(studentData.class_name)}&section_id=${encodeURIComponent(studentData.section)}&schoolCode=${encodeURIComponent(studentData.schoolCode)}`;
-
-        const res = await axios.get(url);
-        const data = res.data.timetable || [];
-
-        const dayMap: any = {};
-        data.forEach((item: any) => {
-          dayMap[item.day] = {
-            day: item.day,
-            periods: item.periods || {
-              morning: [],
-              afternoon: [],
-              evening: [],
-              night: [],
-            },
-          };
-        });
-
-        const uniqueDays = Object.values(dayMap);
-        const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const sortedData = uniqueDays.sort((a: any, b: any) => daysOrder.indexOf(a.day) - daysOrder.indexOf(b.day));
-        setTimetable(sortedData);
-      } catch (error) {
-        console.error('Timetable fetch error:', error);
-        showError('Timetable Error', 'Unable to load timetable. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTT();
-  }, [studentData]);
-
-  if (loading) {
-    return <ActivityIndicator size="small" color="#000" style={{ marginTop: 20 }} />;
-  }
-
-  const getSortedPeriods = (row: any) => {
-    const allPeriods = [
-      ...(row.periods?.morning || []),
-      ...(row.periods?.afternoon || []),
-      ...(row.periods?.evening || []),
-      ...(row.periods?.night || []),
-    ];
-    const uniqueMap = new Map();
-    allPeriods.forEach((p: any) => {
-      const key = `${p.fromTime}-${p.toTime}-${p.subject}`;
-      if (!uniqueMap.has(key)) uniqueMap.set(key, p);
-    });
-    return Array.from(uniqueMap.values()).sort((a, b) => a.fromTime.localeCompare(b.fromTime));
-  };
-
-  const maxPeriods = Math.max(...timetable.map(row => getSortedPeriods(row).length), 0);
-  const rowLabelWidth = 88;
-  const dayCellMinWidth =
-    timetable.length > 0
-      ? Math.max(96, Math.floor((phoneWidth - rowLabelWidth - 56) / Math.min(timetable.length, 5)))
-      : 110;
-
-  return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 20 }}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={timetableStyles.tableOuter}>
-          <View style={timetableStyles.headerRow}>
-            <View style={[timetableStyles.cornerCell, { width: rowLabelWidth }]}>
-              <Text style={timetableStyles.headerText}>Period</Text>
-            </View>
-            {timetable.map((row, index) => (
-              <View
-                key={`${row.day}-${index}`}
-                style={[timetableStyles.dayHeaderCell, { minWidth: dayCellMinWidth }]}
-              >
-                <Text style={timetableStyles.headerText}>{row.day}</Text>
-              </View>
-            ))}
-          </View>
-
-          {Array.from({ length: maxPeriods }).map((_, periodIndex) => (
-            <View key={periodIndex} style={timetableStyles.dataRow}>
-              <View style={[timetableStyles.periodCell, { width: rowLabelWidth }]}>
-                <Text style={timetableStyles.periodText}>{`Period ${periodIndex + 1}`}</Text>
-              </View>
-
-              {timetable.map((dayRow, dayIndex) => {
-                const periods = getSortedPeriods(dayRow);
-                const p = periods[periodIndex];
-
-                return (
-                  <View
-                    key={`${dayRow.day}-${dayIndex}-${periodIndex}`}
-                    style={[timetableStyles.subjectCell, { minWidth: dayCellMinWidth }]}
-                  >
-                    <Text numberOfLines={2} style={timetableStyles.subjectText}>
-                      {p ? p.subject : ''}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-    </ScrollView>
   );
 };
 

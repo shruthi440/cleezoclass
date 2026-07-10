@@ -5,6 +5,7 @@ import {
   Image,
   ImageSourcePropType,
   Pressable,
+  RefreshControl,
   ScrollView,
   StatusBar,
   Text,
@@ -62,7 +63,7 @@ const API_BASE = 'http://162.215.210.38:3010/api';
 const heroImage: ImageSourcePropType = require('./assets/dashboard.png');
 const logoImage: ImageSourcePropType = require('./assets/Cleezo.png');
 
-const topChips = [ 'Requests', 'Uploads','Leave',];
+const topChips = ['Requests', 'Uploads', 'Leave'];
 const backArrowImage: ImageSourcePropType = require('./assets/Arrow.png');
 
 const renderIcon = (kind: IconKind, name: string, color: string, size: number) => {
@@ -89,6 +90,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [processingUploadId, setProcessingUploadId] = useState<number | null>(null);
   const [processingLeaveId, setProcessingLeaveId] = useState<number | null>(null);
   const [requestLoadError, setRequestLoadError] = useState('');
@@ -104,11 +106,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     schoolCode: '',
   });
 
+  // Load school code from AsyncStorage
   const loadSchoolCode = async () => {
     const code = await AsyncStorage.getItem('schoolCode');
     if (code) setSchoolCode(code);
   };
 
+  // Load admin profile from AsyncStorage
   const loadAdminProfile = async () => {
     try {
       const storedUserDetailsRaw = await AsyncStorage.getItem('userDetails');
@@ -143,9 +147,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
+  // Fetch teacher requests
   const fetchRequests = async (code: string) => {
     try {
       const res = await axios.get(`${API_BASE}/admin/requests`, { params: { schoolCode: code } });
+      console.log('[AdminDashboard] fetchRequests response:', res.data);
       setRequests(Array.isArray(res.data) ? res.data : []);
       setRequestLoadError('');
     } catch (err: any) {
@@ -155,9 +161,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
+  // Fetch pending uploads
   const fetchPendingUploads = async (code: string) => {
     try {
       const res = await axios.get(`${API_BASE}/get-pending-uploads`, { params: { schoolCode: code } });
+      console.log('[AdminDashboard] fetchPendingUploads response:', res.data);
       setPendingUploads(Array.isArray(res.data?.pendingUploads) ? res.data.pendingUploads : []);
       setPendingLoadError('');
     } catch (err: any) {
@@ -167,9 +175,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
+  // Fetch leave requests
   const fetchLeaves = async (code: string) => {
     try {
       const res = await axios.get(`${API_BASE}/leave/pending`, { params: { schoolCode: code } });
+      console.log('[AdminDashboard] fetchLeaves response:', res.data);
       setLeaves(Array.isArray(res.data) ? res.data : []);
       setLeaveLoadError('');
     } catch (err: any) {
@@ -179,28 +189,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
+  // Load dashboard data
   const loadDashboard = async () => {
     setLoading(true);
     const code = (await AsyncStorage.getItem('schoolCode')) || schoolCode;
     if (code) setSchoolCode(code);
-    await Promise.allSettled([
-      fetchRequests(code || schoolCode),
-      fetchPendingUploads(code || schoolCode),
-      fetchLeaves(code || schoolCode),
-    ]);
-    setLoading(false);
+
+    try {
+      await Promise.allSettled([
+        fetchRequests(code || schoolCode),
+        fetchPendingUploads(code || schoolCode),
+        fetchLeaves(code || schoolCode),
+      ]);
+    } catch (error) {
+      console.error('[AdminDashboard] loadDashboard error:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
+  // Handle pull-to-refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadDashboard();
+  };
+
+  // Load initial data
   useEffect(() => {
     loadSchoolCode();
     loadAdminProfile();
   }, []);
 
+  // Reload data when screen is focused
   useEffect(() => {
     if (!isFocused) return;
     loadDashboard();
   }, [isFocused]);
 
+  // Handle request approval/rejection
   const handleRequestAction = async (requestId: number, action: 'approved' | 'rejected') => {
     try {
       const res = await axios.post(`${API_BASE}/admin/request/update`, {
@@ -209,12 +236,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         action,
       });
       Alert.alert('Success', res.data?.message || 'Updated successfully');
-      loadDashboard();
-    } catch {
+      await loadDashboard();
+    } catch (error) {
+      console.error('[AdminDashboard] handleRequestAction error:', error);
       Alert.alert('Error', 'Failed to update request');
     }
   };
 
+  // Handle upload approval/rejection
   const handleUploadAction = async (uploadId: number, action: 'approved' | 'rejected') => {
     try {
       setProcessingUploadId(uploadId);
@@ -224,14 +253,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         schoolCode,
       });
       Alert.alert('Success', res.data?.message || 'Action completed');
-      loadDashboard();
-    } catch {
+      await loadDashboard();
+    } catch (error) {
+      console.error('[AdminDashboard] handleUploadAction error:', error);
       Alert.alert('Error', 'Failed to process upload');
     } finally {
       setProcessingUploadId(null);
     }
   };
 
+  // Handle leave approval/rejection
   const handleLeaveAction = async (leaveId: number, action: 'approved' | 'rejected') => {
     try {
       setProcessingLeaveId(leaveId);
@@ -241,15 +272,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
         schoolCode,
       });
       Alert.alert('Success', res.data?.message || 'Leave updated successfully');
-      loadDashboard();
+      await loadDashboard();
     } catch (error: any) {
-      console.log('[AdminDashboard] handleLeaveAction error:', error?.response?.data || error?.message);
+      console.error('[AdminDashboard] handleLeaveAction error:', error?.response?.data || error?.message);
       Alert.alert('Error', 'Failed to update leave request');
     } finally {
       setProcessingLeaveId(null);
     }
   };
 
+  // Handle logout
   const handleLogout = async () => {
     try {
       setShowAdminDetails(false);
@@ -276,6 +308,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
     }
   };
 
+  // Overview cards data
   const overviewCards = useMemo(
     () => [
       {
@@ -309,11 +342,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
   );
 
   const pendingRequests = requests.filter(item => item.status === 'pending');
-
   const latestRequests = useMemo(() => requests, [requests]);
   const latestUploads = useMemo(() => pendingUploads, [pendingUploads]);
   const latestLeaves = useMemo(() => leaves, [leaves]);
 
+  // Handle chip selection
   const selectChip = (chip: 'Overview' | 'Requests' | 'Uploads' | 'Leave') => {
     setSelectedChip(chip);
     setTimeout(() => {
@@ -323,8 +356,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
       });
     }, 60);
   };
-
-
 
   return (
     <View style={styles.screen}>
@@ -336,14 +367,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           contentContainerStyle={styles.scrollContent}
           stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#000"
+            />
+          }
         >
-           <View style={styles.toolbar}>
-                    
-                    <View style={styles.toolbarSpacer} />
-                    <Pressable style={styles.toolbarButton}>
-                      <FontAwesome name="bell" size={18} color="#F4F4F4" />
-                    </Pressable>
-                  </View>
+          <View style={styles.toolbar}>
+            <View style={styles.toolbarSpacer} />
+            <Pressable  onPress={loadDashboard}>
+              <MaterialIcons name="refresh" size={18} color="#333" />
+            </Pressable>
+           
+          </View>
 
           <View style={styles.chipStickyHeader}>
             <ScrollView
@@ -369,8 +407,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
                       {chip}
                     </Text>
                   </Pressable>
+                  
                 );
               })}
+                 <Pressable style={[styles.chip]}  onPress={loadDashboard}>
+              <MaterialIcons name="refresh" size={18} color="#333" />
+            </Pressable>
             </ScrollView>
           </View>
 
@@ -381,42 +423,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
             </View>
 
             <Text style={styles.sectionTitle}>Admin Dashboard</Text>
-        
-            <View style={styles.dashboardGrid}>
-              <Pressable style={styles.dashboardGridCard} onPress={() => selectChip('Requests')}>
-                <View style={styles.gridIconWrap}>
-                  {renderIcon('material', 'how-to-reg', '#7F7F84', 26)}
-                </View>
-                <Text style={styles.gridLabel}>Requests</Text>
-              </Pressable>
 
-              <Pressable style={styles.dashboardGridCard} onPress={() => selectChip('Uploads')}>
-                <View style={styles.gridIconWrap}>
-                  {renderIcon('material', 'photo-library', '#7F7F84', 26)}
-                </View>
-                <Text style={styles.gridLabel}>Uploads</Text>
-              </Pressable>
-
-              <Pressable style={styles.dashboardGridCard} onPress={() => selectChip('Leave')}>
-                <View style={styles.gridIconWrap}>
-                  {renderIcon('material', 'assignment', '#7F7F84', 26)}
-                </View>
-                <Text style={styles.gridLabel}>Leave</Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.dashboardGridCard}
-                onPress={() => navigation.navigate('ChiefAnnouncements')}
-              >
-                <View style={styles.gridIconWrap}>
-                  {renderIcon('material', 'campaign', '#7F7F84', 26)}
-                </View>
-                <Text style={styles.gridLabel}>Announcements</Text>
-              </Pressable>
-
-    
-            </View>
-
+     
             <Text style={styles.sectionTitle}>Status</Text>
             <View style={styles.statusCardsRow}>
               {overviewCards.map((card, index) => (
@@ -728,6 +736,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           </View>
         </ScrollView>
 
+        {/* Admin Details Popup */}
         {showAdminDetails && (
           <View style={styles.overlay}>
             <View style={styles.teacherPopupCard}>
@@ -790,10 +799,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = () => {
           </View>
         )}
 
+        {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerNav}>
             <Pressable style={styles.footerNavItem} onPress={() => navigation.goBack()}>
-                    <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
+              <Image source={backArrowImage} style={{ width: 22, height: 22 }} resizeMode="contain" />
               <Text style={styles.footerNavLabel}>Back</Text>
             </Pressable>
             <Pressable style={styles.footerNavItem} onPress={() => setSelectedChip('Overview')}>
@@ -978,4 +988,4 @@ const local = {
   },
 } as const;
 
-export default AdminDashboard;
+export default AdminDashboard;  

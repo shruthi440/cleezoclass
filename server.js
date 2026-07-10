@@ -2376,28 +2376,123 @@ app.get('/get-notification-count', (req, res) => {
 
 
 // Endpoint to Save Push Token
-app.post('/save-token', (req, res) => {
-  const { username, push_token } = req.body;
+const savePushToken = (req, res) => {
+  const {
+    username,
+    schoolCode,
+    userType,
+    className,
+  } = req.body;
+  const pushToken = req.body.push_token || req.body.pushToken;
+  const tokenPreview = pushToken
+    ? `${String(pushToken).slice(0, 12)}...${String(pushToken).slice(-8)}`
+    : null;
 
-  if (!username || !push_token) {
-    return res.status(400).json({ success: false, message: 'Missing required fields.' });
+  console.log('[PushToken] Request received', {
+    path: req.originalUrl,
+    method: req.method,
+    username,
+    schoolCode,
+    userType,
+    className,
+    hasPushToken: Boolean(pushToken),
+    tokenLength: pushToken ? String(pushToken).length : 0,
+    tokenPreview,
+    bodyKeys: Object.keys(req.body || {}),
+  });
+
+  if (!schoolCode || !username || !pushToken) {
+    console.warn('[PushToken] Missing required fields', {
+      hasSchoolCode: Boolean(schoolCode),
+      hasUsername: Boolean(username),
+      hasPushToken: Boolean(pushToken),
+    });
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields.',
+      required: ['schoolCode', 'username', 'push_token'],
+    });
   }
 
-  const query = `
-    INSERT INTO user_tokens (username, push_token) 
-    VALUES (?, ?)
-    ON DUPLICATE KEY UPDATE push_token = ?;
-  `;
-  db.query(query, [username, push_token, push_token], (err, result) => {
-    if (err) {
-      console.error('Error saving data:', err);
+  let db;
+  try {
+    console.log('[PushToken] Connecting to school database', { schoolCode });
+    db = getDynamicDbConnection(schoolCode);
+  } catch (err) {
+    console.error('[PushToken] DB connection error:', err.message);
+    return res.status(500).json({ success: false, message: 'Database connection error.' });
+  }
+
+  console.log('[PushToken] Reading user_tokens columns');
+  db.query('SHOW COLUMNS FROM user_tokens', (columnsErr, columns) => {
+    if (columnsErr) {
+      db.end();
+      console.error('[PushToken] Error reading user_tokens columns:', columnsErr);
       return res.status(500).json({ success: false, message: 'Database error.' });
     }
 
-  
-    res.json({ success: true, message: 'Push token saved successfully.' });
+    const columnNames = new Set(columns.map((column) => column.Field));
+    console.log('[PushToken] user_tokens columns found', {
+      columns: Array.from(columnNames),
+    });
+
+    const tokenData = {
+      username,
+      push_token: pushToken,
+      user_type: userType,
+      schoolCode,
+      school_code: schoolCode,
+      class_name: className,
+    };
+    const insertColumns = ['username', 'push_token', 'user_type', 'schoolCode', 'school_code', 'class_name']
+      .filter((column) => columnNames.has(column) && tokenData[column] !== undefined);
+    const placeholders = insertColumns.map(() => '?').join(', ');
+    const updates = insertColumns
+      .filter((column) => column !== 'username')
+      .map((column) => `${column} = VALUES(${column})`)
+      .join(', ');
+    const values = insertColumns.map((column) => tokenData[column]);
+    const query = `
+      INSERT INTO user_tokens (${insertColumns.join(', ')})
+      VALUES (${placeholders})
+      ON DUPLICATE KEY UPDATE ${updates || 'username = VALUES(username)'}
+    `;
+
+    console.log('[PushToken] Running insert/upsert', {
+      username,
+      schoolCode,
+      insertColumns,
+      valueCount: values.length,
+    });
+
+    db.query(query, values, (err) => {
+      db.end();
+      if (err) {
+        console.error('[PushToken] Error saving push token:', {
+          message: err.message,
+          code: err.code,
+          errno: err.errno,
+          sqlState: err.sqlState,
+          sqlMessage: err.sqlMessage,
+        });
+        return res.status(500).json({ success: false, message: 'Database error.' });
+      }
+
+      console.log('[PushToken] Saved successfully', {
+        username,
+        schoolCode,
+        userType,
+        className,
+        tokenLength: String(pushToken).length,
+      });
+
+      res.json({ success: true, message: 'Push token saved successfully.' });
+    });
   });
-});
+};
+
+app.post('/save-token', savePushToken);
+app.post('/api/store-push-tok', savePushToken);
 
 
 

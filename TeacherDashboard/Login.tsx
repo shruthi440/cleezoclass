@@ -15,6 +15,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import messaging from '@react-native-firebase/messaging';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { widthPercentageToDP as wp, heightPercentageToDP as hp } from 'react-native-responsive-screen';
@@ -38,6 +39,7 @@ type RootStackParamList = {
   BusManagerDashboard: undefined;
   BusDashboard: undefined;
   BusDriverDashboard: undefined;
+  ExcelUpload: undefined;
 };
 
 const TeacherLogin: React.FC = () => {
@@ -83,19 +85,19 @@ const { showError } = useContext(ErrorContext);
     }
   }, [showError]);
 
-  const askToEnableLocation = useCallback(() => {
+const askToEnableLocation = useCallback(() => {
     return new Promise<boolean>((resolve) => {
       Alert.alert(
-        'Enable Location',
-        'Turn on location access so attendance can be tracked automatically?',
+        'Location Permission Required',
+        'Cleezo Class collects location data to verify your proximity to the campus and automate your check-in and attendance logging, even when the app is closed or not in use. This data is purely used for your attendance tracking and is never shared with third parties.',
         [
           {
-            text: 'Not now',
+            text: 'Deny',
             style: 'cancel',
             onPress: () => resolve(false),
           },
           {
-            text: 'Turn on',
+            text: 'Agree & Continue',
             onPress: async () => {
               const granted = await requestLocationPermission();
               if (granted) {
@@ -109,7 +111,6 @@ const { showError } = useContext(ErrorContext);
       );
     });
   }, []);
-
   /* ---------------- AUTO LOGIN ---------------- */
 
   const autoLogin = useCallback(async () => {
@@ -200,6 +201,27 @@ const { showError } = useContext(ErrorContext);
 
   /* ---------------- LOGIN HANDLER ---------------- */
 
+  const getAvailablePushToken = async () => {
+    const storedToken = await AsyncStorage.getItem('fcmToken');
+    if (storedToken) return storedToken;
+
+    const authStatus = await messaging().requestPermission();
+    const isAuthorized =
+      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+    if (!isAuthorized) {
+      console.warn('Push token sync skipped: notification permission not granted');
+      return null;
+    }
+
+    const token = await messaging().getToken();
+    if (token) {
+      await AsyncStorage.setItem('fcmToken', token);
+    }
+    return token || null;
+  };
+
 
   const storePushToken = async (
     loginUsername: string,
@@ -209,32 +231,33 @@ const { showError } = useContext(ErrorContext);
     className?: string,
   ) => {
     try {
-      console.log('Sending push token:', { username: loginUsername, pushToken, userType, schoolCode, className });
-      const response = await axios.post('http://162.215.210.38:3010/api/store-push-tok', {
+      const payload = {
         username: loginUsername,
         pushToken,
+        push_token: pushToken,
         userType,
         schoolCode,
         className,
+      };
+
+      console.log('Sending push token:', {
+        username: loginUsername,
+        userType,
+        schoolCode,
+        className,
+        tokenLength: pushToken.length,
       });
+
+      const response = await axios.post('http://162.215.210.38:3010/api/store-push-tok', payload);
       console.log('📤 Push token sent to server:', response.data);
     } catch (error: any) {
-      if (error.response) {
-        showError(
-          'Push Token Error',
-          error.response.data?.message || 'Failed to sync push token'
-        );
-      } else if (error.request) {
-        showError(
-          'Network Error',
-          'Unable to connect to server while syncing push token'
-        );
-      } else {
-        showError(
-          'Push Token Error',
-          error?.message || 'Unexpected error occurred'
-        );
-      }
+      const message =
+        error.response?.data?.message ||
+        (error.request
+          ? 'Unable to connect to server while syncing push token'
+          : error?.message || 'Unexpected error occurred while syncing push token');
+
+      console.warn('Push token sync skipped:', message);
     }
   };
 
@@ -255,25 +278,43 @@ const { showError } = useContext(ErrorContext);
       );
 
       const data = response.data;
-
       if (!data.success) {
-        // Show a user-friendly message for invalid credentials
-        showError('Login Failed', 'Please enter valid credentials');
+        if (data.code === 'ACCOUNT_DISABLED') {
+          showError(
+            'Account Disabled',
+            data.message || 'This account is disabled. Please contact your school administrator.'
+          );
+        } else {
+          showError(
+            'Login Failed',
+            data.message || 'Please enter valid credentials'
+          );
+        }
         return;
       }
 
       // ✅ Store user info in AsyncStorage
+      const userType = String(data.userType || data.user_type || '').trim().toLowerCase();
+      if (!userType) {
+        showError(
+          'Login Failed',
+          'User type is missing from the server response. Please contact support.'
+        );
+        return;
+      }
+
+      const schoolCode = String(data.schoolCode || data.school_code || data.schoolcode || '').trim();
       const normalizedDesignation = String(data.designation || '').toLowerCase().trim();
       const designationKey = normalizedDesignation.replace(/[\s_-]+/g, '');
       const isAdminRole = designationKey === 'admin';
-      const isAccountantRole = data.userType === 'management' && designationKey === 'accountant';
+      const isAccountantRole = userType === 'management' && designationKey === 'accountant';
       const isBusManagerRole =
-        data.userType === 'management' &&
+        userType === 'management' &&
         designationKey === 'busmanager';
       const isBusDriverRole = designationKey === 'busdriver' || designationKey === 'driver';
-      const isChiefRole = data.userType === 'management' && designationKey === 'superadmin';
+      const isChiefRole = userType === 'management' && designationKey === 'superadmin';
       let nextScreen: string = 'TeacherDashboard';
-      if (data.userType === 'student') {
+      if (userType === 'student') {
         nextScreen = 'ParentDetails';
       } else if (isChiefRole) {
         nextScreen = 'ChiefDashboard';
@@ -285,15 +326,15 @@ const { showError } = useContext(ErrorContext);
         nextScreen = 'BusDriverDashboard';
       } else if (isAdminRole) {
         nextScreen = 'AdminDashboard';
-      } else if (data.userType === 'teacher') {
+      } else if (userType === 'teacher') {
         nextScreen = 'TeacherDashboard';
       }
 
       await AsyncStorage.multiSet([
-        ['userType', data.userType],
+        ['userType', userType],
         ['username', username],
         ['name', data.name || ''],
-        ['schoolCode', String(data.schoolCode || '')],
+        ['schoolCode', schoolCode],
         ['designation', data.designation || ''],
         ['userDetails', JSON.stringify(data)],
         ['lastScreen', nextScreen],
@@ -302,7 +343,7 @@ const { showError } = useContext(ErrorContext);
       setTeacherUsername(username);
 
       // Decide dashboard navigation    
-      if (data.userType === 'teacher') {
+      if (userType === 'teacher') {
         const granted = await askToEnableLocation();
         if (granted) {
           await AsyncStorage.setItem('attendanceTrackingEnabled', 'true');
@@ -317,17 +358,17 @@ const { showError } = useContext(ErrorContext);
         }
 
         navigation.replace('TeacherDashboard', { username, name: data.name });
-      } else if (data.userType === 'student') {
+      } else if (userType === 'student') {
         navigation.replace('ParentDetails', { username, name: data.name });
       } else if (isChiefRole) {
         navigation.replace('ChiefDashboard', { username, name: data.name });
       } else if (isAccountantRole) {
-        navigation.replace('AccountantDashboard', { username, name: data.name });
+        navigation.replace('ExcelUpload');
       } else if (isBusManagerRole) {
         navigation.replace('BusDashboard');
       } else if (isBusDriverRole) {
         navigation.replace('BusDriverDashboard');
-      } else if ((data.userType === 'management' || data.userType === 'marketing') && isAdminRole) {
+      } else if ((userType === 'management' || userType === 'marketing') && isAdminRole) {
         navigation.replace('AdminDashboard');
       } else {
         // If management but not superadmin, block access
@@ -338,43 +379,86 @@ const { showError } = useContext(ErrorContext);
       // Sync push token asynchronously
       setTimeout(async () => {
         try {
-          const finalToken = await AsyncStorage.getItem('fcmToken');
+          const finalToken = await getAvailablePushToken();
           if (!finalToken) {
-            console.warn('⚠️ FCM token not ready yet, will sync later');
+            console.warn('⚠️ FCM token unavailable, push token sync skipped');
             return;
           }
 
           await storePushToken(
             username,
             finalToken,
-            data.userType,
-            String(data.schoolCode),
+            userType,
+            schoolCode,
             data.class_name
           );
 
           console.log('✅ Background tasks done');
         } catch (error: unknown) {
           if (error instanceof Error) {
-            showError('Background Task Error', error.message);
+            console.warn('Background push token task skipped:', error.message);
           } else {
-            showError('Background Task Error', 'Something went wrong while completing background tasks');
+            console.warn('Background push token task skipped');
           }
         }
       }, 0);
 
       console.log('LOGIN_TOTAL end');
     } catch (err: any) {
-      if (err.response) {
-        // Server returned a response (e.g., 401, 400)
-        showError('Login Failed', 'Please enter valid credentials');
-      } else if (err.request) {
-        // Request made but no response received
-        showError('Network Error', 'Server not reachable. Check your connection.');
-      } else {
-        // Something else went wrong
-        showError('Error', err.message || 'An unexpected error occurred');
-      }
+  console.error('Login Error:', err);
+
+  if (err.response) {
+    const { message, code } = err.response.data || {};
+
+    if (code === 'ACCOUNT_DISABLED') {
+      showError(
+        'Account Disabled',
+        message ||
+          'This account is disabled. Please contact your school administrator.'
+      );
+      return;
     }
+
+    if (err.response.status === 401) {
+      showError(
+        'Login Failed',
+        message || 'Incorrect username or password'
+      );
+      return;
+    }
+
+    if (err.response.status === 403) {
+      showError(
+        'Access Denied',
+        message || 'You are not authorized to access this application.'
+      );
+      return;
+    }
+
+    if (err.response.status === 400) {
+      showError(
+        'Validation Error',
+        message || 'Please enter username and password'
+      );
+      return;
+    }
+
+    showError(
+      'Login Failed',
+      message || 'An error occurred while logging in'
+    );
+  } else if (err.request) {
+    showError(
+      'Network Error',
+      'Server not reachable. Check your internet connection.'
+    );
+  } else {
+    showError(
+      'Error',
+      err.message || 'An unexpected error occurred'
+    );
+  }
+}
   };
 
 

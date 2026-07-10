@@ -23,6 +23,7 @@ import { useNavigation } from '@react-navigation/native';
 import { BarChart } from 'react-native-chart-kit';
 import LinearGradient from 'react-native-linear-gradient';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { createAppStyles } from '../App.styles';
 import { RootStackParamList } from '../types';
@@ -51,6 +52,7 @@ type IconKind = 'material' | 'fontawesome';
 type ParentModuleRoute =
   | 'AcademicSummary'
   | 'FeesSummary'
+  | 'ParentReports'
   | 'ParentAcademic'
   | 'ParentAttendance'
   | 'ParentFees'
@@ -93,6 +95,36 @@ type ParentChild = {
   gender?: string;
   school_name?: string;
   photo?: string;
+};
+
+type BehaviourReport = {
+  positivePercentage: number;
+  needsImprovementPercentage: number;
+  negativePercentage: number;
+  comments: {
+    Positive?: string[];
+    NeedsToImprovement?: string[];
+    Negative?: string[];
+  };
+};
+
+type AcademicReportRow = {
+  subject: string;
+  totalMarks: number;
+};
+
+type OverallAttendanceReport = {
+  presentPercentage: number;
+  informedPercentage: number;
+  uninformedPercentage: number;
+  presentDays: number;
+};
+
+type ReportSlice = {
+  label: string;
+  value: number;
+  color: string;
+  detail?: string;
 };
 
 const logoImage: ImageSourcePropType = require('../assets/Cleezo.png');
@@ -384,6 +416,19 @@ const parentTiles: ParentTile[] = [
     metaValue: '',
   },
   {
+    label: 'Reports',
+    icon: 'assessment',
+    kind: 'material',
+    route: 'ParentReports',
+    component: ParentAcademic,
+    iconColor: '#000000',
+    borderColor: '#D9DDE5',
+    iconBg: '#FFFFFF',
+    cardBg: '#FFFFFF',
+    metaLabel: 'Academics',
+    metaValue: '',
+  },
+  {
     label: 'Homework',
     icon: 'assignment',
     kind: 'material',
@@ -598,6 +643,492 @@ const parentDashboardCardStyles = StyleSheet.create({
   },
 });
 
+const reportStyles = StyleSheet.create({
+  shell: {
+    paddingTop: 4,
+  },
+  overallCard: {
+    alignItems: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#ECEEF3',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginTop: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  chartGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+  },
+  chartCard: {
+    width: '48%',
+    minHeight: 268,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#ECEEF3',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  wideChartCard: {
+    width: '100%',
+    minHeight: 236,
+  },
+  chartTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#111111',
+    fontWeight: '900',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  chartCenterText: {
+    position: 'absolute',
+    top: 70,
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
+  chartCenterValue: {
+    fontSize: 18,
+    lineHeight: 22,
+    color: '#111111',
+    fontWeight: '900',
+  },
+  chartCenterLabel: {
+    fontSize: 10,
+    lineHeight: 13,
+    color: '#666A73',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  legendWrap: {
+    width: '100%',
+    marginTop: 12,
+    gap: 7,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+  legendText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 14,
+    color: '#333740',
+    fontWeight: '700',
+  },
+  reportHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#666A73',
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  summaryCard: {
+    width: '47%',
+    minHeight: 92,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#ECEEF3',
+    backgroundColor: '#F8F9FC',
+    padding: 12,
+  },
+  fullCard: {
+    width: '100%',
+  },
+  cardLabel: {
+    fontSize: 12,
+    lineHeight: 15,
+    color: '#666A73',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  cardValue: {
+    fontSize: 20,
+    lineHeight: 25,
+    color: '#101114',
+    fontWeight: '900',
+  },
+  cardHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#666A73',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    lineHeight: 19,
+    color: '#101114',
+    fontWeight: '900',
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  progressRow: {
+    marginBottom: 12,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  progressLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#333740',
+    fontWeight: '800',
+  },
+  progressValue: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#333740',
+    fontWeight: '900',
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#ECEEF3',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  commentBox: {
+    borderRadius: 12,
+    backgroundColor: '#F8F9FC',
+    borderWidth: 1,
+    borderColor: '#ECEEF3',
+    padding: 12,
+    marginBottom: 8,
+  },
+  commentLabel: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#333740',
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  commentText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#666A73',
+    fontWeight: '600',
+  },
+  downloadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: 8,
+    backgroundColor: '#17477F',
+    paddingHorizontal: 10,
+    height: 34,
+    minWidth: 98,
+  },
+  downloadButtonDisabled: {
+    opacity: 0.62,
+  },
+  downloadButtonText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+  },
+  reportCardOuter: {
+    borderWidth: 2,
+    borderColor: '#9BB8D8',
+    backgroundColor: '#F7FBFF',
+    padding: 5,
+    marginTop: 12,
+  },
+  reportCardInner: {
+    borderWidth: 1,
+    borderColor: '#2F63A3',
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+  },
+  schoolTitle: {
+    color: '#16457E',
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  reportSubtitle: {
+    color: '#56718F',
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C6D8EB',
+    paddingBottom: 8,
+  },
+  reportLogoBox: {
+    width: 58,
+    borderWidth: 1,
+    borderColor: '#C6D8EB',
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  reportLogoImage: {
+    width: 50,
+    height: 46,
+  },
+  reportLogoText: {
+    color: '#16457E',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  identityGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+  },
+  identityCell: {
+    width: '32%',
+    minHeight: 25,
+    borderWidth: 1,
+    borderColor: '#C6D8EB',
+    borderRadius: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    paddingVertical: 2,
+    backgroundColor: '#F9FCFF',
+  },
+  identityText: {
+    color: '#0E2742',
+    fontSize: 8,
+    lineHeight: 10,
+    textAlign: 'center',
+    fontWeight: '700',
+  },
+  identityLabel: {
+    fontWeight: '900',
+  },
+  studentPhotoBox: {
+    width: 58,
+    borderWidth: 1,
+    borderColor: '#C6D8EB',
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  studentPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  studentPhotoText: {
+    color: '#33485F',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  reportSectionHeader: {
+    borderWidth: 1,
+    borderColor: '#9CB9D9',
+    borderRadius: 4,
+    backgroundColor: '#EAF1F8',
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    marginTop: 10,
+  },
+  reportSectionTitle: {
+    color: '#17477F',
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+  },
+  reportTable: {
+    minWidth: '100%',
+    borderLeftWidth: 1,
+    borderTopWidth: 1,
+    borderColor: '#9FB0C7',
+    marginTop: 6,
+  },
+  reportTableRow: {
+    flexDirection: 'row',
+  },
+  reportTableHead: {
+    backgroundColor: '#315E9F',
+  },
+  reportTh: {
+    width: 52,
+    minHeight: 27,
+    color: '#FFFFFF',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#7E99BD',
+    paddingVertical: 6,
+  },
+  reportTd: {
+    width: 52,
+    minHeight: 27,
+    color: '#0E2742',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#9FB0C7',
+    paddingVertical: 6,
+    paddingHorizontal: 3,
+  },
+  subjectColumn: {
+    width: 96,
+  },
+  behaviourTh: {
+    width: 76,
+    minHeight: 28,
+    color: '#FFFFFF',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#7E99BD',
+    paddingVertical: 6,
+  },
+  behaviourTd: {
+    width: 76,
+    minHeight: 34,
+    color: '#0E2742',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#9FB0C7',
+    paddingVertical: 5,
+    paddingHorizontal: 3,
+  },
+  remarkColumn: {
+    flex: 1,
+    minWidth: 130,
+  },
+  attendanceTh: {
+    flex: 1,
+    minHeight: 27,
+    color: '#FFFFFF',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#7E99BD',
+    paddingVertical: 6,
+  },
+  attendanceTd: {
+    flex: 1,
+    minHeight: 27,
+    color: '#0E2742',
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    borderRightWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#9FB0C7',
+    paddingVertical: 6,
+  },
+  teacherRemarkBox: {
+    borderWidth: 1,
+    borderColor: '#C6D8EB',
+    backgroundColor: '#FFFFFF',
+    padding: 8,
+    marginTop: 6,
+  },
+  teacherRemarkText: {
+    color: '#0E2742',
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  graphReportRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  graphReportBox: {
+    flex: 1,
+    minHeight: 78,
+    borderWidth: 1,
+    borderColor: '#C6D8EB',
+    padding: 8,
+    backgroundColor: '#FBFDFF',
+  },
+  graphReportTitle: {
+    color: '#597CA5',
+    fontSize: 12,
+    lineHeight: 15,
+    fontWeight: '900',
+    marginBottom: 3,
+  },
+  graphReportText: {
+    color: '#31516F',
+    fontSize: 9,
+    lineHeight: 13,
+    fontWeight: '700',
+  },
+});
+
 const renderIcon = (kind: IconKind, name: string, color: string, size: number) => {
   if (kind === 'fontawesome') {
     return <FontAwesome name={name} size={size} color={color} />;
@@ -605,6 +1136,74 @@ const renderIcon = (kind: IconKind, name: string, color: string, size: number) =
 
   return <MaterialIcons name={name} size={size} color={color} />;
 };
+
+const clampPercent = (value: any) => Math.max(0, Math.min(100, Number(value) || 0));
+
+const makePiePath = (
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number
+) => {
+  const startX = centerX + radius * Math.cos(startAngle);
+  const startY = centerY + radius * Math.sin(startAngle);
+  const endX = centerX + radius * Math.cos(endAngle);
+  const endY = centerY + radius * Math.sin(endAngle);
+  const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+
+  return `M ${centerX} ${centerY} L ${startX} ${startY} A ${radius} ${radius} 0 ${largeArc} 1 ${endX} ${endY} Z`;
+};
+
+const ReportPie = ({
+  slices,
+  size = 150,
+  fallbackColor = '#F0F1F5',
+}: {
+  slices: ReportSlice[];
+  size?: number;
+  fallbackColor?: string;
+}) => {
+  const radius = size / 2;
+  const validSlices = slices.filter((slice) => Number(slice.value) > 0);
+  const total = validSlices.reduce((sum, slice) => sum + Number(slice.value || 0), 0);
+
+  if (!total) {
+    return (
+      <Svg width={size} height={size}>
+        <Circle cx={radius} cy={radius} r={radius} fill={fallbackColor} />
+      </Svg>
+    );
+  }
+
+  let startAngle = -Math.PI / 2;
+
+  return (
+    <Svg width={size} height={size}>
+      {validSlices.map((slice) => {
+        const angle = (Number(slice.value || 0) / total) * 2 * Math.PI;
+        const endAngle = startAngle + angle;
+        const path = makePiePath(radius, radius, radius, startAngle, endAngle);
+        startAngle = endAngle;
+
+        return <Path key={slice.label} d={path} fill={slice.color} stroke="#FFFFFF" strokeWidth={2} />;
+      })}
+    </Svg>
+  );
+};
+
+const ReportLegend = ({ slices }: { slices: ReportSlice[] }) => (
+  <View style={reportStyles.legendWrap}>
+    {slices.map((slice) => (
+      <View key={slice.label} style={reportStyles.legendItem}>
+        <View style={[reportStyles.legendColor, { backgroundColor: slice.color }]} />
+        <Text style={reportStyles.legendText} numberOfLines={2}>
+          {slice.label}: {slice.detail || `${Math.round(Number(slice.value || 0))}%`}
+        </Text>
+      </View>
+    ))}
+  </View>
+);
 
 const computeAcademicSummary = (performance: any[], testTypes: any[]) => {
   const safePerformance = Array.isArray(performance) ? performance : [];
@@ -689,8 +1288,29 @@ const computeAcademicSummary = (performance: any[], testTypes: any[]) => {
   return { grade, percentage };
 };
 
+const escapeHtml = (value: any) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const getGradeFromPercent = (value: number) => {
+  const pct = Number(value || 0);
+  if (pct >= 90) return 'A+';
+  if (pct >= 80) return 'A';
+  if (pct >= 70) return 'B+';
+  if (pct >= 60) return 'B';
+  if (pct >= 50) return 'C';
+  return pct > 0 ? 'D' : '-';
+};
+
+const formatReportPercent = (value: number) => `${Math.max(0, Math.min(100, Number(value || 0))).toFixed(1)}%`;
+
 const ParentDashboard = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const RNHTMLtoPDF = require('react-native-html-to-pdf').default;
   const [selectedChip, setSelectedChip] = useState<(typeof topChips)[number]>('Overview');
   const [selectedModule, setSelectedModule] = useState<ParentModuleRoute>('ParentAcademic');
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -708,6 +1328,12 @@ const ParentDashboard = () => {
   const [leaveData, setLeaveData] = useState<any[]>([]);
   const [attendanceChartData, setAttendanceChartData] = useState<any>(null);
   const [attendanceCount, setAttendanceCount] = useState(0);
+  const [behaviourReport, setBehaviourReport] = useState<BehaviourReport | null>(null);
+  const [behaviourLoading, setBehaviourLoading] = useState(false);
+  const [academicReportRows, setAcademicReportRows] = useState<AcademicReportRow[]>([]);
+  const [overallAttendanceReport, setOverallAttendanceReport] = useState<OverallAttendanceReport | null>(null);
+  const [reportDataLoading, setReportDataLoading] = useState(false);
+  const [reportDownloading, setReportDownloading] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const parentActionAnimValues = useRef<Animated.Value[]>([]);
   const parentActionImageAnimValues = useRef<Animated.Value[]>([]);
@@ -865,187 +1491,197 @@ const ParentDashboard = () => {
       setChildrenLoading(false);
     }
   };
+const loadSummaries = async (profileLike?: Record<string, any> | null, dataLike?: Record<string, any> | null) => {
+  console.log('================ LOAD SUMMARIES START ================');
 
-  const loadSummaries = async (profileLike?: Record<string, any> | null, dataLike?: Record<string, any> | null) => {
-    const activeStudent = {
-      ...(profileLike || {}),
-      ...(dataLike || {}),
-    };
+  const activeStudent = { ...(profileLike || {}), ...(dataLike || {}) };
 
-    if (
-      !activeStudent?.name ||
-      !activeStudent?.class_name ||
-      !activeStudent?.section ||
-      !activeStudent?.schoolCode
-    ) {
-      return;
-    }
+  console.log('👨‍🎓 Active Student:', activeStudent);
 
-    try {
-      const studentId =
-        activeStudent?.studentId ||
-        activeStudent?.id ||
-        (await AsyncStorage.getItem('studentId')) ||
-        '';
+  if (
+    !activeStudent?.name ||
+    !activeStudent?.class_name ||
+    !activeStudent?.section ||
+    !activeStudent?.schoolCode
+  ) {
+    console.log('❌ Missing required student data', {
+      name: activeStudent?.name,
+      class_name: activeStudent?.class_name,
+      section: activeStudent?.section,
+      schoolCode: activeStudent?.schoolCode,
+    });
+    return;
+  }
 
-      const [academicRes, feeApiRes, studentFeeRes, classRes, paymentRes, dynamicRowsRes, feeStructureRes, dynamicFeeTypesRes] = await Promise.allSettled([
-        axios.post('https://cleezoclass.com:4000/api/overall/academic-performance', {
+  try {
+    const studentId =
+      activeStudent?.studentId ||
+      activeStudent?.id ||
+      (await AsyncStorage.getItem('studentId')) ||
+      '';
+
+    console.log('🆔 Student ID:', studentId);
+
+    console.log('📡 Calling APIs...');
+
+    const [academicRes, paymentRes] = await Promise.allSettled([
+      axios.post(
+        'https://cleezoclass.com:4000/api/overall/academic-performance',
+        {
           name: activeStudent.name,
           class_name: activeStudent.class_name,
           section: activeStudent.section,
           schoolCode: activeStudent.schoolCode,
-        }),
-        axios.get(`https://cleezoclass.com:4000/api/fees/${encodeURIComponent(String(activeStudent.username || ''))}`, {
-          params: { schoolCode: activeStudent.schoolCode },
-        }),
-        axios.post('https://cleezoclass.com:4000/api/studentFees', {
-          studentId,
-          schoolCode: activeStudent.schoolCode,
-        }),
-        axios.get('https://cleezoclass.com:4000/api/feeDetailsByClassSection', {
-          params: {
-            className: activeStudent.class_name,
-            section: activeStudent.section,
-            schoolCode: activeStudent.schoolCode,
-          },
-        }),
-        axios.get(`https://cleezoclass.com:4000/api/payment/${studentId}?schoolCode=${activeStudent.schoolCode}`),
-        axios.get('https://cleezoclass.com:4000/api/student-transactions-dynamic', {
-          params: {
-            schoolCode: activeStudent.schoolCode,
-            studentName: activeStudent.name || activeStudent.username || '',
-            className: activeStudent.class_name,
-            section: activeStudent.section,
-            includeUnpaid: 1,
-          },
-        }),
-        axios.get(`https://cleezoclass.com:4000/feeStructure/${encodeURIComponent(String(activeStudent.class_name || ''))}`, {
-          params: {
-            schoolCode: activeStudent.schoolCode,
-            section: activeStudent.section,
-          },
-        }),
-        axios.get('https://cleezoclass.com:4000/api/fee-types', {
-          params: { schoolCode: activeStudent.schoolCode, _t: Date.now() },
-        }),
-      ]);
+        }
+      ),
+      axios.get(
+        `https://cleezoclass.com:4000/api/payment/${studentId}?schoolCode=${activeStudent.schoolCode}`
+      ),
+    ]);
 
-      const academicData = academicRes.status === 'fulfilled' ? academicRes.value.data : {};
-      const performance = Array.isArray(academicData)
-        ? academicData
-        : Array.isArray(academicData?.performance)
-        ? academicData.performance
-        : Array.isArray(academicData?.data)
-        ? academicData.data
-        : [];
-      const testTypes = Array.isArray(academicData?.testTypes) ? academicData.testTypes : [];
-      setAcademicSummary(computeAcademicSummary(performance, testTypes));
+    console.log('📚 Academic API Status:', academicRes.status);
+    console.log('💰 Payment API Status:', paymentRes.status);
 
-      const feeApiPayload = feeApiRes.status === 'fulfilled' ? feeApiRes.value.data?.data || {} : {};
-      const studentFeeData =
-        studentFeeRes.status === 'fulfilled'
-          ? studentFeeRes.value.data?.feeDetails || studentFeeRes.value.data?.feeDetail || {}
-          : {};
-      const paymentPayload =
-        paymentRes.status === 'fulfilled' ? paymentRes.value.data?.payments || {} : {};
-      const feeStructureData =
-        feeStructureRes.status === 'fulfilled'
-          ? feeStructureRes.value.data?.feeStructure || feeStructureRes.value.data?.feeDetail || {}
-          : {};
-      const fallbackClassFeeData =
-        classRes.status === 'fulfilled'
-          ? classRes.value.data?.feeDetail || classRes.value.data?.feeStructure || {}
-          : {};
-      const dynamicFeeTypes = (dynamicFeeTypesRes.status === 'fulfilled'
-        ? Array.isArray(dynamicFeeTypesRes.value.data?.data)
-          ? dynamicFeeTypesRes.value.data.data
-          : Array.isArray(dynamicFeeTypesRes.value.data)
-          ? dynamicFeeTypesRes.value.data
-          : []
-        : [])
-        .filter((item: Record<string, any>) => String(item?.feeName || item?.feesType || '').trim() !== '')
-        .map((item: Record<string, any>) => ({
-          id: item?.id,
-          feeName: item?.feeName || '',
-          feesType: item?.feesType || 'Custom Fee',
-          scope: item?.scope || 'All',
-          frequency: item?.frequency || 'One time',
-          installments: item?.installments || 1,
-          columnBase: normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || ''),
-        }));
-      const dynamicRows =
-        dynamicRowsRes.status === 'fulfilled' && Array.isArray(dynamicRowsRes.value.data)
-          ? dynamicRowsRes.value.data
-          : [];
+    if (academicRes.status === 'fulfilled') {
+      console.log('📚 Academic Response:', academicRes.value.data);
+    } else {
+      console.error('❌ Academic API Failed:', academicRes.reason);
+    }
 
-      const paymentDetails = {
-        ...(paymentPayload || {}),
-        ...(feeApiPayload || {}),
-        ...(feeApiPayload?.studentFeeDetails || {}),
-        ...(studentFeeData || {}),
-        ...(paymentPayload?.discounts || {}),
-      };
+    if (paymentRes.status === 'fulfilled') {
+      console.log('💰 Payment Response:', paymentRes.value.data);
+    } else {
+      console.error('❌ Payment API Failed:', paymentRes.reason);
+    }
 
-      const paymentSource = {
-        ...(paymentDetails || {}),
-        ...(paymentDetails?.discounts || {}),
-      };
-      Object.entries(paymentDetails?.dynamicFeeTotals || {}).forEach(([key, value]) => {
-        const normalized = normalizeFeeKey(key);
-        if (!normalized) return;
-        paymentSource[normalized] = value;
-      });
-      (Array.isArray(paymentDetails?.feeBreakdown) ? paymentDetails.feeBreakdown : []).forEach((row: any) => {
-        const label = String(row?.label || row?.key || '').trim();
-        const normalized = normalizeFeeKey(label);
-        if (!normalized) return;
-        paymentSource[normalized] = row?.total ?? row?.amount ?? paymentSource[normalized];
-        paymentSource[`${normalized}_paid`] = row?.paid ?? paymentSource[`${normalized}_paid`];
-        paymentSource[`${normalized}_discount`] = row?.discount ?? paymentSource[`${normalized}_discount`];
-        paymentSource[`${normalized}_due`] = row?.due ?? paymentSource[`${normalized}_due`];
+    // Academic Summary
+    const academicData =
+      academicRes.status === 'fulfilled'
+        ? academicRes.value.data
+        : {};
+
+    const performance = Array.isArray(academicData)
+      ? academicData
+      : academicData?.performance || academicData?.data || [];
+
+    const testTypes = Array.isArray(academicData?.testTypes)
+      ? academicData.testTypes
+      : [];
+
+    console.log('📖 Performance Data:', performance);
+    console.log('📝 Test Types:', testTypes);
+
+    const academicSummary = computeAcademicSummary(
+      performance,
+      testTypes
+    );
+
+    console.log('📊 Academic Summary:', academicSummary);
+
+    setAcademicSummary(academicSummary);
+
+    // Fee Summary
+    const paymentData =
+      paymentRes.status === 'fulfilled'
+        ? paymentRes.value.data
+        : null;
+
+    console.log('💳 Full Payment Data:', paymentData);
+
+    const dynamicBreakdown =
+      paymentData?.payments?.dynamicFeeBreakdown || [];
+
+    console.log(
+      '💳 Dynamic Fee Breakdown:',
+      JSON.stringify(dynamicBreakdown, null, 2)
+    );
+
+    if (dynamicBreakdown.length > 0) {
+      const summaryRows = dynamicBreakdown.map((fee: any) => ({
+        label: fee.label || fee.key || 'Fee',
+        amount: Number(fee.total || 0),
+        paid: Number(fee.paid || 0),
+        discount: Number(fee.discount || 0),
+        due: Number(fee.remaining || 0),
+      }));
+
+      console.log('📋 Summary Rows:', summaryRows);
+
+      const totalAmount = summaryRows.reduce(
+        (sum, row) => sum + row.amount,
+        0
+      );
+
+      const paidAmount = summaryRows.reduce(
+        (sum, row) => sum + row.paid,
+        0
+      );
+
+      const discountAmount = summaryRows.reduce(
+        (sum, row) => sum + row.discount,
+        0
+      );
+
+      const calculatedDue = summaryRows.reduce(
+        (sum, row) => sum + row.due,
+        0
+      );
+
+      const totalDue = Number(
+        paymentData?.payments?.totalRemaining || 0
+      );
+
+      console.log('💰 Fee Calculations:', {
+        totalAmount,
+        paidAmount,
+        discountAmount,
+        calculatedDue,
+        backendTotalDue: totalDue,
       });
 
-      const feeRows = buildFeeRowsFromSource(
-        paymentSource,
-        Object.keys(feeStructureData || {}).length ? feeStructureData : fallbackClassFeeData || null,
-        dynamicFeeTypes
-      );
-      const allowedLabels = new Set(
-        dynamicFeeTypes
-          .map((item: { columnBase?: string; feeName?: string; feesType?: string }) =>
-            normalizeFeeKey(item?.columnBase || item?.feeName || item?.feesType || '')
-          )
-          .filter(Boolean)
-      );
-      const filteredFeeRows = feeRows.filter((row) => allowedLabels.size === 0 || allowedLabels.has(normalizeFeeKey(row.label)));
-      const summaryRows = feeRows.length
-        ? filteredFeeRows
-        : dynamicRows.length
-        ? dynamicRows.map((row: any) => ({
-            amount: Number(row?.CompleteFee || row?.completeFee || row?.Final_Amount || row?.Total_Amount || row?.totalAmount || 0),
-            paid: Number(row?.Paid_Amount || row?.paid_amount || row?.paidAmount || 0),
-            discount: Number(row?.Discount || row?.discount || row?.discountAmount || row?.discount_amount || 0),
-            due: Number(row?.Due_Amount || row?.Total_Due || row?.dueAmount || 0),
-          }))
-        : [];
+      const feeSummary = {
+        paid: formatINR(paidAmount),
+        due: formatINR(totalDue),
+        percent:
+          totalAmount > 0
+            ? String(
+                Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    Math.round((paidAmount / totalAmount) * 100)
+                  )
+                )
+              )
+            : '0',
+      };
 
-      const totalAmount = summaryRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-      const paidAmount = summaryRows.reduce((sum, row) => sum + Number(row.paid || 0), 0);
-      const discountAmount = summaryRows.reduce((sum, row) => sum + Number(row.discount || 0), 0);
-      const dueAmount =
-        summaryRows.length > 0
-          ? summaryRows.reduce((sum, row) => sum + Number(row.due || 0), 0)
-          : Math.max(totalAmount - paidAmount - discountAmount, 0);
+      console.log('📊 Final Fee Summary:', feeSummary);
+
+      setFeeSummary(feeSummary);
+    } else {
+      console.warn(
+        '⚠️ No dynamicFeeBreakdown found in payment response'
+      );
 
       setFeeSummary({
-        paid: formatINR(paidAmount),
-        due: formatINR(dueAmount),
-        percent: totalAmount > 0 ? String(Math.max(0, Math.min(100, Math.round((paidAmount / totalAmount) * 100)))) : '0',
+        paid: '₹ 0.00',
+        due: '₹ 0.00',
+        percent: '0',
       });
-    } catch (error) {
-      console.error('Failed to load parent summaries:', error);
     }
-  };
+
+    console.log('================ LOAD SUMMARIES END ================');
+  } catch (error) {
+    console.error('❌ Failed to load parent summaries:', error);
+
+    if (axios.isAxiosError(error)) {
+      console.error('📛 Axios Error Response:', error.response?.data);
+      console.error('📛 Axios Error Status:', error.response?.status);
+      console.error('📛 Axios Error URL:', error.config?.url);
+    }
+  }
+};
 
   const filteredAttendanceLeaves = useMemo(() => {
     const selectedUsername = normalizeValue(studentData?.username || studentProfile?.username);
@@ -1122,6 +1758,116 @@ const ParentDashboard = () => {
     void fetchAttendanceLeaves();
   }, [studentData?.schoolCode, studentProfile?.schoolCode]);
 
+  useEffect(() => {
+    const fetchBehaviourReport = async () => {
+      const studentName = String(studentData?.name || studentProfile?.name || '').trim();
+      const schoolCode = String(
+        studentData?.schoolCode ||
+          studentProfile?.schoolCode ||
+          (await AsyncStorage.getItem('schoolCode')) ||
+          ''
+      ).trim();
+
+      if (!studentName) {
+        setBehaviourReport(null);
+        return;
+      }
+
+      try {
+        setBehaviourLoading(true);
+        const reportUrl = schoolCode
+          ? `http://162.215.210.38:3010/over-all-reports/report/${encodeURIComponent(studentName)}?schoolCode=${encodeURIComponent(schoolCode)}`
+          : `http://162.215.210.38:3010/report/${encodeURIComponent(studentName)}`;
+        let response = await fetch(reportUrl);
+        let data = await response.json().catch(() => null);
+
+        if (!response.ok && schoolCode) {
+          response = await fetch(`http://162.215.210.38:3010/report/${encodeURIComponent(studentName)}`);
+          data = await response.json().catch(() => null);
+        }
+
+        if (response.ok && data) {
+          setBehaviourReport({
+            positivePercentage: Number(data.positivePercentage || 0),
+            needsImprovementPercentage: Number(data.needsImprovementPercentage || 0),
+            negativePercentage: Number(data.negativePercentage || 0),
+            comments: data.comments || {},
+          });
+        } else {
+          setBehaviourReport(null);
+        }
+      } catch (error) {
+        console.error('Failed to load behaviour report:', error);
+        setBehaviourReport(null);
+      } finally {
+        setBehaviourLoading(false);
+      }
+    };
+
+    void fetchBehaviourReport();
+  }, [studentData?.name, studentData?.schoolCode, studentProfile?.name, studentProfile?.schoolCode]);
+
+  useEffect(() => {
+    const fetchReportCards = async () => {
+      const studentName = String(studentData?.name || studentProfile?.name || '').trim();
+      const schoolCode = String(
+        studentData?.schoolCode ||
+          studentProfile?.schoolCode ||
+          (await AsyncStorage.getItem('schoolCode')) ||
+          ''
+      ).trim();
+
+      if (!studentName || !schoolCode) {
+        setAcademicReportRows([]);
+        setOverallAttendanceReport(null);
+        return;
+      }
+
+      try {
+        setReportDataLoading(true);
+        const [academicRes, attendanceRes] = await Promise.allSettled([
+          axios.get('http://162.215.210.38:3010/over-all-reports/student-performance', {
+            params: { name: studentName, schoolCode },
+          }),
+          axios.get(`http://162.215.210.38:3010/over-all-reports/attendance/${encodeURIComponent(studentName)}`, {
+            params: { schoolCode },
+          }),
+        ]);
+
+        if (academicRes.status === 'fulfilled' && academicRes.value.data) {
+          const academicPayload = academicRes.value.data;
+          const rows = Object.keys(academicPayload).map((subject) => ({
+            subject,
+            totalMarks: Number(academicPayload?.[subject]?.totalMarks || 0),
+          }));
+          setAcademicReportRows(rows.filter((row) => row.subject));
+        } else {
+          setAcademicReportRows([]);
+        }
+
+        if (attendanceRes.status === 'fulfilled' && attendanceRes.value.data) {
+          const attendancePayload = attendanceRes.value.data;
+          setOverallAttendanceReport({
+            presentPercentage: clampPercent(attendancePayload.presentPercentage),
+            informedPercentage: clampPercent(attendancePayload.informedPercentage),
+            uninformedPercentage: clampPercent(attendancePayload.uninformedPercentage),
+            presentDays: Number(attendancePayload.presentDays || 0),
+          });
+        } else {
+          setOverallAttendanceReport(null);
+        }
+      } catch (error) {
+        console.error('Failed to load report card charts:', error);
+        setAcademicReportRows([]);
+        setOverallAttendanceReport(null);
+      } finally {
+        setReportDataLoading(false);
+      }
+    };
+
+    void fetchReportCards();
+  }, [studentData?.name, studentData?.schoolCode, studentProfile?.name, studentProfile?.schoolCode]);
+
   const refreshParentAccount = async () => {
     const data = await loadStudentData();
     const profile = await loadStudentProfile();
@@ -1196,6 +1942,7 @@ const ParentDashboard = () => {
         return parentTiles.filter(
           (tile) =>
             tile.route === 'ParentAcademic' ||
+            tile.route === 'ParentReports' ||
             tile.route === 'ParentFees' ||
             tile.route === 'ParentAttendance' ||
             tile.route === 'ParentHomework' ||
@@ -1223,6 +1970,7 @@ const ParentDashboard = () => {
   const selectedChipTiles = useMemo(() => {
     const quickOrder: ParentModuleRoute[] = [
       'ParentAcademic',
+      'ParentReports',
       'ParentHomework',
       'ParentFees',
       'ParentTimetable',
@@ -1243,6 +1991,7 @@ const ParentDashboard = () => {
           case 'Learning':
             return (
             tile.route === 'ParentAcademic' ||
+            tile.route === 'ParentReports' ||
             tile.route === 'ParentFees' ||
             tile.route === 'ParentAttendance' ||
             tile.route === 'ParentHomework' ||
@@ -1288,6 +2037,14 @@ const ParentDashboard = () => {
             ...tile,
             metaLabel: 'Summary',
             metaValue: `${academicSummary.grade} • ${academicSummary.percentage}%`,
+          };
+        }
+
+        if (tile.route === 'ParentReports') {
+          return {
+            ...tile,
+            metaLabel: 'View',
+            metaValue: 'Academic Behaviour Attendance',
           };
         }
 
@@ -1387,6 +2144,16 @@ const ParentDashboard = () => {
         accent: '#FFF',
       },
       {
+        id: 'reports',
+        title: 'Reports',
+        value: 'Academics',
+        subtitle: 'Behaviour and attendance together',
+        cta: 'Open Reports',
+        image: require('../assets/studentReports.png'),
+        route: 'ParentReports' as ParentModuleRoute,
+        accent: '#FFF',
+      },
+      {
         id: 'homework',
         title: 'Homework',
         value: 'Open work',
@@ -1454,17 +2221,21 @@ const ParentDashboard = () => {
     };
   }, [parentActionCards]);
 
-  const openModule = (route: ParentModuleRoute) => {
-    setSelectedModule(route);
-    (navigation.navigate as any)(
-      route,
-      {
-        username: studentData?.username || studentProfile?.username || '',
-        name: studentData?.name || studentProfile?.name || '',
-      }
-    );
+const openModule = (route: ParentModuleRoute) => {
+  setSelectedModule(route);
+  
+  // Construct the parameters safely
+  const studentParams = {
+    username: studentData?.username || studentProfile?.username || '',
+    name: studentData?.name || studentProfile?.name || '',
+    class_name: activeStudentClass, // e.g., "Class 1"
+    className: activeStudentClass,  // fallback key if your sub-screens use camelCase
+    section: activeStudentSection,
+    schoolCode: studentData?.schoolCode || studentProfile?.schoolCode || '',
   };
 
+  (navigation.navigate as any)(route, studentParams);
+};
   const handleGoBack = () => {
     if (navigation.canGoBack()) {
       navigation.goBack();
@@ -1497,15 +2268,18 @@ const ParentDashboard = () => {
     void refreshParentAccount();
   };
 
-  const schoolNameDisplay =
-    String(
-      studentData?.school_name ||
-        studentProfile?.school_name ||
-        studentData?.schoolCode ||
-        studentProfile?.schoolCode ||
-        teacherProfileCache?.schoolCode ||
-        'School Name'
-    ).trim();
+const schoolCodeOrName = String(
+  studentData?.school_name ||
+    studentProfile?.school_name ||
+    studentData?.schoolCode ||
+    studentProfile?.schoolCode ||
+    teacherProfileCache?.schoolCode ||
+    'School Name'
+).trim();
+
+const schoolNameDisplay = schoolCodeOrName.includes("_")
+  ? schoolCodeOrName.split("_").slice(1).join(" ").trim()
+  : schoolCodeOrName;
   const activeStudentName =
     String(studentData?.name || studentProfile?.name || loginName || 'Student').trim() || 'Student';
   const activeStudentClass =
@@ -1517,6 +2291,10 @@ const ParentDashboard = () => {
   ).trim() || '-';
   const activeStudentFather =
     String(studentData?.father_name || studentProfile?.father_name || '-').trim() || '-';
+  const activeStudentAadhar = String(studentData?.aadhar_no || studentProfile?.aadhar_no || '-').trim() || '-';
+  const activeStudentAddress = String(studentData?.address || studentProfile?.address || '-').trim() || '-';
+  const activeStudentDob = String(studentData?.dob || studentProfile?.dob || studentData?.date_of_birth || studentProfile?.date_of_birth || '-').trim() || '-';
+  const activeStudentAdmission = String(studentData?.admission_no || studentProfile?.admission_no || studentData?.admission || studentProfile?.admission || '-').trim() || '-';
   const activeStudentId = String(
     studentData?.studentId || studentProfile?.studentId || studentData?.id || studentProfile?.id || '-'
   ).trim() || '-';
@@ -1531,6 +2309,262 @@ const ParentDashboard = () => {
     { label: 'Phone', value: activeStudentPhone },
     { label: 'Student ID', value: activeStudentId },
   ];
+  const reportAcademicRows = academicReportRows.length
+    ? academicReportRows.map((row) => {
+        const marks = Number(row.totalMarks || 0);
+        const percent = Math.max(0, Math.min(100, marks));
+        return {
+          subject: row.subject,
+          fa1: '-',
+          fa2: '-',
+          sa1: '-',
+          fa3: '-',
+          fa4: '-',
+          sa2: '-',
+          marks: marks.toFixed(marks % 1 === 0 ? 0 : 1),
+          percent: formatReportPercent(percent),
+          grade: getGradeFromPercent(percent),
+        };
+      })
+    : [
+        {
+          subject: 'Overall',
+          fa1: '-',
+          fa2: '-',
+          sa1: '-',
+          fa3: '-',
+          fa4: '-',
+          sa2: '-',
+          marks: academicSummary.percentage,
+          percent: `${academicSummary.percentage}%`,
+          grade: academicSummary.grade,
+        },
+      ];
+  const attendancePresentPercent = overallAttendanceReport?.presentPercentage ?? Math.max(0, 100 - attendanceCount);
+  const attendancePresentDays = overallAttendanceReport?.presentDays ?? 0;
+  const estimatedTotalDays =
+    attendancePresentPercent > 0 && attendancePresentDays > 0
+      ? Math.max(attendancePresentDays, Math.round(attendancePresentDays / (attendancePresentPercent / 100)))
+      : attendancePresentDays + attendanceCount;
+  const attendanceAbsentDays = Math.max(0, estimatedTotalDays - attendancePresentDays);
+  const attendanceMonthLabel = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  const behaviourPositiveRemark = behaviourReport?.comments?.Positive?.filter(Boolean)?.[0] || 'Consistent participation and classroom conduct.';
+  const behaviourImprovementRemark =
+    behaviourReport?.comments?.NeedsToImprovement?.filter(Boolean)?.[0] || 'Keep improving with regular practice and focus.';
+  const behaviourNegativeRemark = behaviourReport?.comments?.Negative?.filter(Boolean)?.[0] || 'No major negative behaviour reported.';
+  const teacherRemark = `${activeStudentName} is showing ${academicSummary.grade === '-' ? 'steady' : academicSummary.grade} progress with ${academicSummary.percentage}% academic performance. Attendance is ${formatReportPercent(attendancePresentPercent)} and behaviour feedback is reviewed above.`;
+  const positiveBehaviour = Math.max(0, Math.min(100, behaviourReport?.positivePercentage || 0));
+  const improvementBehaviour = Math.max(0, Math.min(100, behaviourReport?.needsImprovementPercentage || 0));
+  const negativeBehaviour = Math.max(0, Math.min(100, behaviourReport?.negativePercentage || 0));
+  const behaviourComments = [
+    {
+      label: 'Positive',
+      comments: behaviourReport?.comments?.Positive || [],
+    },
+    {
+      label: 'Needs Improvement',
+      comments: behaviourReport?.comments?.NeedsToImprovement || [],
+    },
+    {
+      label: 'Negative',
+      comments: behaviourReport?.comments?.Negative || [],
+    },
+  ].filter((item) => item.comments.length > 0);
+  const academicPieColors = ['#A8E6A3', '#77D77D', '#4CAF50', '#388E3C', '#607D3B', '#2C6B2F'];
+  const academicSlices = academicReportRows.length
+    ? academicReportRows.map((row, index) => ({
+        label: row.subject,
+        value: row.totalMarks,
+        color: academicPieColors[index % academicPieColors.length],
+        detail: String(row.totalMarks || 0),
+      }))
+    : [
+        {
+          label: 'Overall',
+          value: Number(academicSummary.percentage) || 0,
+          color: '#A8E6A3',
+          detail: `${academicSummary.percentage}%`,
+        },
+      ];
+  const attendanceSlices = [
+    {
+      label: 'Present',
+      value: overallAttendanceReport?.presentPercentage ?? Math.max(0, 100 - attendanceCount),
+      color: '#81CDD4',
+      detail: `${Math.round(overallAttendanceReport?.presentPercentage ?? Math.max(0, 100 - attendanceCount))}%`,
+    },
+    {
+      label: 'Informed',
+      value: overallAttendanceReport?.informedPercentage ?? 0,
+      color: '#4CB7B7',
+      detail: `${Math.round(overallAttendanceReport?.informedPercentage ?? 0)}%`,
+    },
+    {
+      label: 'Uninformed',
+      value: overallAttendanceReport?.uninformedPercentage ?? attendanceCount,
+      color: '#008080',
+      detail: `${Math.round(overallAttendanceReport?.uninformedPercentage ?? attendanceCount)}%`,
+    },
+  ];
+  const behaviourSlices = [
+    { label: 'Positive', value: positiveBehaviour || (!behaviourReport ? 100 : 0), color: '#E6A2AC', detail: `${positiveBehaviour || (!behaviourReport ? 100 : 0)}%` },
+    { label: 'Needs Improvement', value: improvementBehaviour, color: '#820D23', detail: `${improvementBehaviour}%` },
+    { label: 'Negative', value: negativeBehaviour, color: '#C15168', detail: `${negativeBehaviour}%` },
+  ];
+  const bestAcademic = academicSlices.reduce(
+    (best, item) => (Number(item.value || 0) > Number(best.value || 0) ? item : best),
+    academicSlices[0]
+  );
+  const bestAttendance = attendanceSlices.reduce(
+    (best, item) => (Number(item.value || 0) > Number(best.value || 0) ? item : best),
+    attendanceSlices[0]
+  );
+  const bestBehaviour = behaviourSlices.reduce(
+    (best, item) => (Number(item.value || 0) > Number(best.value || 0) ? item : best),
+    behaviourSlices[0]
+  );
+  const overallSlices = [
+    {
+      label: 'Academic',
+      value: clampPercent(bestAcademic?.value),
+      color: 'rgba(76, 183, 183, 0.75)',
+      detail: bestAcademic ? `${bestAcademic.label}: ${bestAcademic.detail || `${Math.round(bestAcademic.value)}%`}` : 'N/A',
+    },
+    {
+      label: 'Attendance',
+      value: clampPercent(bestAttendance?.value),
+      color: 'rgba(10, 167, 10, 0.4)',
+      detail: bestAttendance ? `${bestAttendance.label}: ${bestAttendance.detail || `${Math.round(bestAttendance.value)}%`}` : 'N/A',
+    },
+    {
+      label: 'Behaviour',
+      value: clampPercent(bestBehaviour?.value),
+      color: 'rgba(130, 13, 35, 0.7)',
+      detail: bestBehaviour ? `${bestBehaviour.label}: ${bestBehaviour.detail || `${Math.round(bestBehaviour.value)}%`}` : 'N/A',
+    },
+  ];
+
+  const buildReportCardHtml = () => {
+    const academicRowsHtml = reportAcademicRows
+      .map(
+        (row) => `
+          <tr>
+            <td>${escapeHtml(row.subject)}</td>
+            <td>${escapeHtml(row.fa1)}</td>
+            <td>${escapeHtml(row.fa2)}</td>
+            <td>${escapeHtml(row.sa1)}</td>
+            <td>${escapeHtml(row.fa3)}</td>
+            <td>${escapeHtml(row.fa4)}</td>
+            <td>${escapeHtml(row.sa2)}</td>
+            <td>${escapeHtml(row.marks)}</td>
+            <td>${escapeHtml(row.percent)}</td>
+            <td>${escapeHtml(row.grade)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    return `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: Arial, sans-serif; color: #10233f; margin: 18px; }
+            .card { border: 2px solid #8db0d9; padding: 8px; }
+            .inner { border: 1px solid #2f63a3; padding: 10px; }
+            .title { text-align: center; font-size: 20px; font-weight: 800; color: #16457e; }
+            .sub { text-align: center; font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+            .top { display: table; width: 100%; margin-bottom: 10px; }
+            .logo, .photo { display: table-cell; width: 90px; border: 1px solid #c8d8eb; text-align: center; vertical-align: middle; font-weight: 700; color: #456; }
+            .info { display: table-cell; padding: 0 8px; }
+            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+            .cell { border: 1px solid #c8d8eb; border-radius: 4px; padding: 5px; text-align: center; font-size: 10px; }
+            .label { font-weight: 800; }
+            .section { background: #eaf1f8; border: 1px solid #9cb9d9; color: #17477f; font-weight: 800; padding: 6px; margin-top: 10px; border-radius: 4px; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 10px; }
+            th { background: #315e9f; color: white; padding: 7px 4px; border: 1px solid #7e99bd; }
+            td { padding: 7px 4px; border: 1px solid #9fb0c7; text-align: center; }
+            .remark { border: 1px solid #c8d8eb; padding: 8px; margin-top: 6px; font-size: 12px; line-height: 1.4; }
+            .reportBoxes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+            .box { border: 1px solid #c8d8eb; padding: 8px; min-height: 70px; font-size: 11px; }
+            .boxTitle { font-size: 13px; color: #597ca5; font-weight: 800; margin-bottom: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="inner">
+              <div class="title">${escapeHtml(schoolNameDisplay)}</div>
+              <div class="sub">ANNUAL PROGRESS REPORT ${new Date().getFullYear()}</div>
+              <div class="top">
+                <div class="logo">CLEEZO<br/>CLASS</div>
+                <div class="info">
+                  <div class="grid">
+                    <div class="cell"><span class="label">Name:</span> ${escapeHtml(activeStudentName)}</div>
+                    <div class="cell"><span class="label">Class:</span> ${escapeHtml(activeStudentClass)}</div>
+                    <div class="cell"><span class="label">Section:</span> ${escapeHtml(activeStudentSection)}</div>
+                    <div class="cell"><span class="label">Father:</span> ${escapeHtml(activeStudentFather)}</div>
+                    <div class="cell"><span class="label">DOB:</span> ${escapeHtml(activeStudentDob)}</div>
+                    <div class="cell"><span class="label">Admission:</span> ${escapeHtml(activeStudentAdmission)}</div>
+                    <div class="cell"><span class="label">Phone:</span> ${escapeHtml(activeStudentPhone)}</div>
+                    <div class="cell"><span class="label">Aadhar:</span> ${escapeHtml(activeStudentAadhar)}</div>
+                    <div class="cell"><span class="label">Address:</span> ${escapeHtml(activeStudentAddress)}</div>
+                  </div>
+                </div>
+                <div class="photo">Student<br/>Photo</div>
+              </div>
+              <div class="section">Academic Performance</div>
+              <table>
+                <thead>
+                  <tr><th>Subject</th><th>FA1</th><th>FA2</th><th>SA1</th><th>FA3</th><th>FA4</th><th>SA2</th><th>Marks</th><th>%</th><th>Grade</th></tr>
+                </thead>
+                <tbody>${academicRowsHtml}</tbody>
+              </table>
+              <div class="section">Behaviour Report</div>
+              <table>
+                <thead><tr><th>Area</th><th>Percentage</th><th>Remark</th><th>Grade</th></tr></thead>
+                <tbody>
+                  <tr><td>Positive</td><td>${formatReportPercent(positiveBehaviour || (!behaviourReport ? 100 : 0))}</td><td>${escapeHtml(behaviourPositiveRemark)}</td><td>${getGradeFromPercent(positiveBehaviour || (!behaviourReport ? 100 : 0))}</td></tr>
+                  <tr><td>Needs Improvement</td><td>${formatReportPercent(improvementBehaviour)}</td><td>${escapeHtml(behaviourImprovementRemark)}</td><td>${getGradeFromPercent(100 - improvementBehaviour)}</td></tr>
+                  <tr><td>Negative</td><td>${formatReportPercent(negativeBehaviour)}</td><td>${escapeHtml(behaviourNegativeRemark)}</td><td>${negativeBehaviour > 0 ? 'Review' : 'A'}</td></tr>
+                </tbody>
+              </table>
+              <div class="section">Attendance Record</div>
+              <table>
+                <thead><tr><th>Month</th><th>Total Days</th><th>Present</th><th>Absent</th><th>Percentage</th></tr></thead>
+                <tbody><tr><td>${escapeHtml(attendanceMonthLabel)}</td><td>${estimatedTotalDays}</td><td>${attendancePresentDays}</td><td>${attendanceAbsentDays}</td><td>${formatReportPercent(attendancePresentPercent)}</td></tr></tbody>
+              </table>
+              <div class="section">Class Teacher's Remark</div>
+              <div class="remark">${escapeHtml(teacherRemark)}</div>
+              <div class="section">Graphical Report</div>
+              <div class="reportBoxes">
+                <div class="box"><div class="boxTitle">Graphical Report:</div><div>Academic: ${escapeHtml(academicSummary.percentage)}%<br/>Attendance: ${formatReportPercent(attendancePresentPercent)}<br/>Behaviour positive: ${formatReportPercent(positiveBehaviour || (!behaviourReport ? 100 : 0))}</div></div>
+                <div class="box"><div class="boxTitle">Analytical Report:</div><div>AI generated performance summary based on academic marks, attendance and behaviour report.</div></div>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  const handleDownloadReportCard = async () => {
+    try {
+      setReportDownloading(true);
+      const safeName = activeStudentName.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Student';
+      const file = await RNHTMLtoPDF.convert({
+        html: buildReportCardHtml(),
+        fileName: `${safeName}_Report_Card`,
+        directory: 'Documents',
+      });
+      Alert.alert('Report downloaded', `PDF saved to: ${file.filePath || 'Documents'}`);
+    } catch (error) {
+      console.error('Failed to download report card:', error);
+      Alert.alert('Download failed', 'Unable to create the report card PDF.');
+    } finally {
+      setReportDownloading(false);
+    }
+  };
 
   const handleSwitchToChild = async (child: ParentChild) => {
     try {
@@ -2397,6 +3431,7 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
         </View>
       </Modal>
 
+
       <Modal
         visible={showAttendanceModal}
         transparent
@@ -2426,10 +3461,11 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
                   data={attendanceChartData}
                   width={Math.max(phoneWidth - 80, 250)}
                   height={220}
+                  yAxisLabel=""
+                  yAxisSuffix=""
                   fromZero
                   showValuesOnTopOfBars
                   withInnerLines={false}
-                  withOuterLines
                   segments={4}
                   chartConfig={{
                     backgroundColor: '#FFFFFF',
@@ -2442,7 +3478,7 @@ colors={['#6826df', '#a174eb','#1A2D4A']}
                       stroke: '#E9E9EE',
                       strokeDasharray: '',
                     },
-                    propsForBarLabels: {
+                    propsForLabels: {
                       fill: '#111',
                     },
                   }}

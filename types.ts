@@ -44,6 +44,7 @@ export type RootStackParamList = {
   TopicOfDay: { username?: string; name?: string } | undefined;
   ParentDashboard: { username?: string; name?: string } | undefined;
   ParentAcademic: { username?: string; name?: string } | undefined;
+  ParentReports: { username?: string; name?: string } | undefined;
   ParentAttendance: { username?: string; name?: string } | undefined;
   ParentFees: { username?: string; name?: string } | undefined;
   ParentHomework: { username?: string; name?: string } | undefined;

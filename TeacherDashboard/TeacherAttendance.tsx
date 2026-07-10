@@ -619,7 +619,7 @@ const availableSections = selectedClass
             ) : null}
           </View>
 
-          <View style={ui.gridCard}>
+<View style={[ui.gridCard, { minHeight: 500 }]}> {/* Adjust minHeight as needed */}
             <FlatList
               data={filteredStudents}
               keyExtractor={(item) => item.username}
@@ -630,8 +630,10 @@ const availableSections = selectedClass
               maxToRenderPerBatch={filteredStudents.length}
               windowSize={Math.max(21, Math.ceil(filteredStudents.length / 3))}
               columnWrapperStyle={ui.studentGridRow}
-              contentContainerStyle={ui.studentGridContent}
-              renderItem={({ item }) => {
+ contentContainerStyle={[
+      ui.studentGridContent,
+      { paddingBottom: 80 }, // Add padding to ensure last row is visible
+    ]}              renderItem={({ item }) => {
                 const originalIndex = students.findIndex(s => s.username === item.username);
 
                 return (

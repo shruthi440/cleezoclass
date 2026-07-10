@@ -53,39 +53,55 @@ const ParentTimetable: React.FC<
     loadStudent();
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
     const fetchTT = async () => {
       try {
         if (!studentData?.class_name || !studentData?.section || !studentData?.schoolCode) {
+          console.warn('ParentTimetable: Missing student credentials for fetch');
           setLoading(false);
           return;
         }
 
         const url = `http://162.215.210.38:3010/api/parent-timetable?class_id=${encodeURIComponent(studentData.class_name)}&section_id=${encodeURIComponent(studentData.section)}&schoolCode=${encodeURIComponent(studentData.schoolCode)}`;
+        
+        console.log('ParentTimetable: Fetching from URL:', url);
+        
         const res = await axios.get(url);
+        
+        // Log the raw response from the API
+        console.log('ParentTimetable: API Response data:', res.data);
+        
         const data = res.data.timetable || [];
 
-        const dayMap: any = {};
-        data.forEach((item: any) => {
-          dayMap[item.day] = {
-            day: item.day,
-            periods: item.periods || {
-              morning: [],
-              afternoon: [],
-              evening: [],
-              night: [],
-            },
-          };
-        });
+    const dayMap: any = {};
+data.forEach((item: any) => {
+  dayMap[item.day] = {
+    day: item.day,
 
+    // Store interval timings
+    morningInterval: item.morningInterval,
+    lunchInterval: item.lunchInterval,
+    afternoonInterval: item.afternoonInterval,
+    eveningInterval: item.eveningInterval,
+
+    periods: item.periods || {
+      morning: [],
+      afternoon: [],
+      evening: [],
+      night: [],
+    },
+  };
+});
         const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const sortedData = Object.values(dayMap).sort(
           (a: any, b: any) => daysOrder.indexOf(a.day) - daysOrder.indexOf(b.day)
         );
 
+        console.log('ParentTimetable: Processed sorted data:', sortedData);
         setTimetable(sortedData);
       } catch (error) {
-        console.error('Timetable error:', error);
+        // Log detailed error for debugging
+        console.error('ParentTimetable: Error fetching timetable:', error);
         showError('Timetable Error', 'Unable to load timetable. Please try again.');
         setTimetable([]);
       } finally {
@@ -96,25 +112,54 @@ const ParentTimetable: React.FC<
     fetchTT();
   }, [studentData, showError]);
 
-  const getSortedPeriods = (row: any) => {
-    const allPeriods = [
+const getSortedPeriods = (row: any) => {
+    const allPeriods: any[] = [];
+
+    // 1. Gather real periods and filter out 00:00:00 dummy entries
+    const rawPeriods = [
       ...(row.periods?.morning || []),
       ...(row.periods?.afternoon || []),
       ...(row.periods?.evening || []),
       ...(row.periods?.night || []),
     ];
 
+    rawPeriods.forEach((p: any) => {
+      if (p.fromTime !== '00:00:00' || p.toTime !== '00:00:00') {
+        allPeriods.push(p);
+      }
+    });
+
+    // 2. Inject intervals if they exist and are not '00:00:00'
+    const intervals = [
+      { time: row.morningInterval, label: 'Morning Break' },
+      { time: row.lunchInterval, label: 'Lunch Break' },
+      { time: row.afternoonInterval, label: 'Afternoon Break' },
+      { time: row.eveningInterval, label: 'Evening Break' },
+    ];
+
+    intervals.forEach((interval) => {
+      if (interval.time && interval.time !== '00:00:00') {
+        allPeriods.push({
+          subject: interval.label,
+          fromTime: interval.time,
+          toTime: interval.time, // Represented as a milestone timestamp
+          isInterval: true,      // Flag to style it differently if needed
+        });
+      }
+    });
+
+    // 3. Deduplicate (just in case)
     const uniqueMap = new Map();
     allPeriods.forEach((period: any) => {
       const key = `${period.fromTime}-${period.toTime}-${period.subject}`;
       if (!uniqueMap.has(key)) uniqueMap.set(key, period);
     });
 
+    // 4. Sort strictly chronologically by start time
     return Array.from(uniqueMap.values()).sort((a: any, b: any) =>
       String(a.fromTime).localeCompare(String(b.fromTime))
     );
   };
-
   const maxPeriods = Math.max(
     10,
     ...timetable.map((row) => getSortedPeriods(row).length),
@@ -351,28 +396,37 @@ const ParentTimetable: React.FC<
                               <Text style={ttStyles.dayText}>{dayRow.day}</Text>
                             </View>
 
-                            {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
-                              const period = periods[periodIndex];
-                              const isLastPeriod = periodIndex === maxPeriods - 1;
+                         {Array.from({ length: maxPeriods }).map((_, periodIndex) => {
+  const period = periods[periodIndex];
+  const isLastPeriod = periodIndex === maxPeriods - 1;
+  const isInterval = period?.isInterval; // Check for our custom flag
 
-                              return (
-                                <View
-                                  key={`${dayRow.day}-${periodIndex}`}
-                                  style={[
-                                    ttStyles.subjectCell,
-                                    {
-                                      width: periodCellWidth,
-                                      borderBottomWidth: isLastRow ? 0 : 1,
-                                      borderRightWidth: isLastPeriod ? 0 : 1,
-                                    },
-                                  ]}
-                                >
-                                  <Text numberOfLines={2} style={ttStyles.subjectText}>
-                                    {period ? period.subject : '--'}
-                                  </Text>
-                                </View>
-                              );
-                            })}
+  return (
+    <View
+      key={`${dayRow.day}-${periodIndex}`}
+      style={[
+        ttStyles.subjectCell,
+        {
+          width: periodCellWidth,
+          borderBottomWidth: isLastRow ? 0 : 1,
+          borderRightWidth: isLastPeriod ? 0 : 1,
+          // Highlight intervals with a soft background color
+          backgroundColor: isInterval ? '#FFF2CC' : '#FFFFFF', 
+        },
+      ]}
+    >
+      <Text 
+        numberOfLines={2} 
+        style={[
+          ttStyles.subjectText, 
+          isInterval && { fontWeight: '700', color: '#B26A00' } // Bold styling for breaks
+        ]}
+      >
+        {period ? period.subject : '--'}
+      </Text>
+    </View>
+  );
+})}
                           </View>
                         );
                       })}
@@ -636,7 +690,7 @@ const ttStyles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: 'row',
-    backgroundColor: '#6f8798',
+    backgroundColor: '#0a3d62',
   },
   cornerCell: {
     minHeight: 62,

@@ -552,12 +552,16 @@ const TeacherDashboard = () => {
           storedDesignation ||
           storedUserDetails.role ||
           '';
-        const resolvedSchoolCode = String(
-          storedUserDetails.schoolCode ||
-            storedTeacherProfile.schoolCode ||
-            storedSchoolCode ||
-            '',
-        );
+   const resolvedSchoolCode = String(
+  storedUserDetails.schoolCode ||
+    storedTeacherProfile.schoolCode ||
+    storedSchoolCode ||
+    ''
+).trim();
+
+const resolvedSchoolName = resolvedSchoolCode.includes("_")
+  ? resolvedSchoolCode.split("_").slice(1).join(" ").trim()
+  : resolvedSchoolCode;
         const resolvedUserType = String(
           storedUserDetails.userType ||
             storedTeacherProfile.userType ||
@@ -1153,7 +1157,9 @@ const TeacherDashboard = () => {
       </View>
     );
   }
-
+const schoolNameDisplay = teacherProfile?.schoolCode
+  ? teacherProfile.schoolCode.split("_").slice(1).join(" ").trim()
+  : "--";
   return (
     <View style={styles.screen}>
       <StatusBar barStyle="light-content" backgroundColor={"#0a3d62"} />
@@ -1176,7 +1182,7 @@ const TeacherDashboard = () => {
                   resizeMode="contain"
                 />
                 <Text style={styles.toolbarBrandName1} numberOfLines={1}>
-                  {teacherProfile.schoolCode || '--'}
+                  {schoolNameDisplay}
                 </Text>
               </View>
             </View>
@@ -1468,6 +1474,8 @@ const TeacherDashboard = () => {
                       { label: 'Name', value: teacherProfile.name || '-' },
                       { label: 'Username', value: teacherProfile.username || '-' },
                       { label: 'Designation', value: teacherProfile.designation || '-' },
+                                            { label: 'schoolCode', value: teacherProfile.schoolCode || '-' },
+
                       { label: 'Phone', value: teacherProfile.phoneNo || '-' },
                     ].map((item) => (
                       <View key={item.label} style={styles.teacherDetailRow}>

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Alert,
-  BackHandler,
   Image,
   PanResponder,
   Pressable,
@@ -15,18 +14,15 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
-  Modal,Dimensions
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { WebView } from 'react-native-webview';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import LinearGradient from 'react-native-linear-gradient';
-import { createAppStyles } from '../App.styles';
-import { RootStackParamList } from '../types';
-const { height } = Dimensions.get('window');
-const quickActionGradientColors = ['#D7C5FF', '#A670EE', '#6D2DE1'] as const;
+import { createAppStyles } from './App.styles';
+import { RootStackParamList } from './types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'BusManagerDashboard'>;
 
@@ -53,7 +49,7 @@ type StudentItem = {
   isDisabled?: boolean;
 };
 
-type SectionKey = 'overview' | 'routes' | 'vehicle' | 'driver' | 'startTime' | 'students' | 'expense';
+type SectionKey = 'overview' | 'routes' | 'students';
 
 type DashboardCard = {
   title: string;
@@ -160,6 +156,30 @@ const buildRouteMapHtml = (
         background: #1C1C1C;
         border: 3px solid #FFFFFF;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+      }
+      .route-label {
+        position: absolute;
+        min-width: 120px;
+        max-width: 170px;
+        padding: 7px 10px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 2px solid rgba(28, 28, 28, 0.16);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+        color: #131313;
+        font-size: 11px;
+        line-height: 14px;
+        transform: translate(-50%, -50%);
+      }
+      .route-label .name {
+        display: block;
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 2px;
+      }
+      .route-label .meta {
+        display: block;
+        color: #5A5A60;
       }
     </style>
     <link
@@ -279,6 +299,21 @@ const buildRouteMapHtml = (
               lineJoin: 'round',
             }
           ).addTo(map);
+          const label = L.marker([point.latitude, point.longitude], {
+            icon: L.divIcon({
+              className: '',
+              html:
+                '<div class="route-label">' +
+                '<span class="name">' + routeName + '</span>' +
+                '<span class="meta">' + routeMeta + '</span>' +
+                '</div>',
+              iconSize: [170, 60],
+              iconAnchor: [85, 30],
+            }),
+          }).addTo(map);
+          label.bindPopup(
+            '<div class="popup-title">' + routeName + '</div><div class="popup-subtitle">' + routeMeta + '</div>'
+          );
           bounds.push([point.latitude, point.longitude]);
         });
 
@@ -294,7 +329,7 @@ const buildRouteMapHtml = (
 };
 
 const API_BASE = 'http://162.215.210.38:3010/api';
-const logoImage = require('../assets/Cleezo.png');
+const logoImage = require('./assets/Cleezo.png');
 const DEBUG_BUS_MANAGER = true;
 
 const dashboardCards: DashboardCard[] = [
@@ -302,7 +337,7 @@ const dashboardCards: DashboardCard[] = [
     title: 'Activate Driver',
     subtitle: 'Enable the current driver',
     icon: 'person-add-outline',
-    target: 'driver',
+    target: 'routes',
     accent: '#EDF3E8',
   },
   {
@@ -316,7 +351,7 @@ const dashboardCards: DashboardCard[] = [
     title: 'Assign Driver',
     subtitle: 'Attach driver details',
     icon: 'id-card-outline',
-    target: 'driver',
+    target: 'routes',
     accent: '#F2EEE9',
   },
   {
@@ -330,104 +365,17 @@ const dashboardCards: DashboardCard[] = [
     title: 'Bus Starting Time',
     subtitle: 'Set route departure time',
     icon: 'time-outline',
-    target: 'startTime',
+    target: 'routes',
     accent: '#ECF5F7',
   },
   {
     title: 'Expense',
     subtitle: 'Record bus expenses',
     icon: 'card-outline',
-    target: 'expense',
+    target: 'routes',
     accent: '#F7F2E7',
   },
 ];
-
-const parentDashboardCardStyles = StyleSheet.create({
-  cardWrapper: {
-    width: 182,
-    minHeight: 128,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
-    marginRight: 10,
-    marginBottom: 12,
-    overflow: 'visible',
-  },
-  card: {
-    width: '100%',
-    minHeight: 128,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#D8DDE6',
-    position: 'relative',
-    overflow: 'hidden',
-    alignItems: 'stretch',
-    justifyContent: 'flex-start',
-    paddingTop: 0,
-    paddingBottom: 0,
-    paddingHorizontal: 0,
-    shadowColor: '#000',
-    shadowOpacity: 0.09,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 3,
-  },
-  cardActive: {
-    borderColor: '#B59BF4',
-  },
-  iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'absolute',
-    top: 14,
-    right: 14,
-    backgroundColor: 'transparent',
-    marginBottom: 0,
-  },
-  cardContent: {
-    width: '100%',
-    flex: 1,
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    justifyContent: 'flex-end',
-    paddingTop: 0,
-    height: 158,
-  },
-  textBlock: {
-    flex: 1,
-    minWidth: 0,
-    width: '100%',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-    paddingTop: 52,
-    paddingBottom: 12,
-    paddingHorizontal: 14,
-  },
-  label: {
-    fontSize: 14,
-    textAlign: 'right',
-    fontWeight: '800',
-    color: '#222222',
-    lineHeight: 17,
-    marginTop: 8,
-    marginBottom: 0,
-    paddingHorizontal: 4,
-  },
-  subtitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    textAlign: 'right',
-    color: '#6C6C74',
-    fontWeight: '600',
-    marginTop: 4,
-    paddingHorizontal: 4,
-  },
-});
 
 const normalizeText = (value: string | null | undefined) =>
   String(value || '')
@@ -440,13 +388,6 @@ const getRouteTokens = (value: string | null | undefined) =>
   normalizeText(value)
     .split(' ')
     .filter((token) => token.length >= 3);
-
-const isSameAddress = (first: string | null | undefined, second: string | null | undefined) => {
-  const firstNormalized = normalizeText(first);
-  const secondNormalized = normalizeText(second);
-
-  return Boolean(firstNormalized && secondNormalized && firstNormalized === secondNormalized);
-};
 
 const addressMatchesRoute = (address: string | null | undefined, route: BusRoute | null) => {
   if (!route) return false;
@@ -606,7 +547,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   const phoneWidth = Math.min(Math.max(width - 24, 320), 390);
   const phoneHeight = Math.min(Math.max(height - 24, 720), 860);
   const shellStyles = useMemo(() => createAppStyles({ phoneWidth, phoneHeight }), [phoneHeight, phoneWidth]);
-  const stackFormCards = phoneWidth < 380;
 
   const [schoolCode, setSchoolCode] = useState('');
   const [routes, setRoutes] = useState<BusRoute[]>([]);
@@ -619,12 +559,10 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   const [newRouteName, setNewRouteName] = useState('');
   const [newOrigin, setNewOrigin] = useState('');
   const [newDestination, setNewDestination] = useState('');
-  const [activeSection, setActiveSection] = useState<SectionKey>('overview');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showDisabledStudents, setShowDisabledStudents] = useState(false);
-  const [showEligibleStudentsPage, setShowEligibleStudentsPage] = useState(false);
   const [showFooterNav] = useState(true);
   const [schoolAddress, setSchoolAddress] = useState('');
   const [routeMapLoading, setRouteMapLoading] = useState(false);
@@ -643,11 +581,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   const sectionOffsets = useRef<Record<SectionKey, number>>({
     overview: 0,
     routes: 0,
-    vehicle: 0,
-    driver: 0,
-    startTime: 0,
     students: 0,
-    expense: 0,
   });
 
   const selectedRoute = routes.find((route) => route.id === selectedRouteId) || routes[0] || null;
@@ -682,54 +616,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     () => buildRouteMapHtml(routeMapSchoolPoint, routeMapRoutes),
     [routeMapRoutes, routeMapSchoolPoint]
   );
-  const automaticDestination = schoolAddress.trim();
-  const sectionTabs = useMemo(
-    () => [
-      { key: 'overview' as SectionKey, label: 'Home', icon: 'home-outline' },
-      { key: 'routes' as SectionKey, label: 'Routes', icon: 'git-branch-outline' },
-      { key: 'vehicle' as SectionKey, label: 'Vehicle', icon: 'bus-outline' },
-      { key: 'driver' as SectionKey, label: 'Driver', icon: 'id-card-outline' },
-      { key: 'startTime' as SectionKey, label: 'Start Time', icon: 'time-outline' },
-      { key: 'students' as SectionKey, label: 'Students', icon: 'people-outline' },
-      { key: 'expense' as SectionKey, label: 'Expense', icon: 'card-outline' },
-    ],
-    []
-  );
-  const activeSectionLabel = sectionTabs.find((tab) => tab.key === activeSection)?.label || 'Bus Manager Dashboard';
-
-  useEffect(() => {
-    if (!automaticDestination) return;
-    setNewDestination(automaticDestination);
-  }, [automaticDestination]);
-
-  useEffect(() => {
-    if (!DEBUG_BUS_MANAGER) return;
-
-    console.log('[BusManagerDashboard] [map] selected route snapshot', {
-      selectedRouteId,
-      selectedRoute: selectedRoute
-        ? {
-            id: selectedRoute.id,
-            routeName: selectedRoute.routeName,
-            origin: selectedRoute.origin,
-            destination: selectedRoute.destination,
-            vehicleNumber: selectedRoute.vehicleNumber,
-            driverName: selectedRoute.driverName,
-            busStartingTime: selectedRoute.busStartingTime,
-            driverExperience: selectedRoute.driverExperience,
-          }
-        : null,
-      routeCount: routes.length,
-      driverCount,
-      routeDrivers: routes.map((route) => ({
-        id: route.id,
-        routeName: route.routeName,
-        driverName: route.driverName,
-        origin: route.origin,
-        destination: route.destination,
-      })),
-    });
-  }, [driverCount, routes, selectedRoute, selectedRouteId]);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -914,9 +800,19 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
   }, []);
 
   const scrollToSection = useCallback((section: SectionKey) => {
-    setShowEligibleStudentsPage(false);
-    setActiveSection(section);
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
+    if (section === 'overview') {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+      return;
+    }
+    requestAnimationFrame(() => {
+      const targetY = sectionOffsets.current[section];
+      if (typeof targetY === 'number') {
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, targetY - 12),
+          animated: true,
+        });
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -952,9 +848,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         const routePalette = ['#E05A47', '#3C7BF4', '#2E8B57', '#9B59B6', '#D68910', '#117A65', '#34495E', '#C0392B'];
         const nextRoutes = await Promise.all(
           routes.map(async (route, index) => {
-            const preferredAddress = String(
-              isSameAddress(route.destination, schoolAddress) ? route.origin || '' : route.destination || route.origin || ''
-            ).trim();
+            const preferredAddress = String(route.destination || route.origin || '').trim();
             const routeLabel = route.origin && route.destination
               ? `${route.origin} → ${route.destination}`
               : route.destination || route.origin || 'No address';
@@ -1072,22 +966,9 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
 
       setSchoolCode(normalizedSchoolCode);
       await loadSchoolLocation(normalizedSchoolCode);
-
-      if (DEBUG_BUS_MANAGER) {
-        console.log('[BusManagerDashboard] [map] fetching bootstrap', {
-          url: `${API_BASE}/bus-manager/bootstrap`,
-          schoolCode: normalizedSchoolCode,
-        });
-      }
-
       const response = await axios.get(`${API_BASE}/bus-manager/bootstrap`, {
         params: { schoolCode: normalizedSchoolCode },
       });
-
-      if (DEBUG_BUS_MANAGER) {
-        console.log('[BusManagerDashboard] [map] bootstrap response keys', Object.keys(response.data || {}));
-        console.log('[BusManagerDashboard] [map] bootstrap response data', response.data);
-      }
 
       const nextRoutes = Array.isArray(response.data?.data?.routes) ? response.data.data.routes : [];
       const nextStudents = Array.isArray(response.data?.data?.students) ? response.data.data.students : [];
@@ -1097,24 +978,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
           routeCount: nextRoutes.length,
           studentCount: nextStudents.length,
           routeNames: nextRoutes.slice(0, 10).map((route: any) => String(route.route_name || '')),
-          routeSamples: nextRoutes.slice(0, 5).map((route: any) => ({
-            id: route.id,
-            route_name: route.route_name,
-            driver_name: route.driver_name,
-            origin: route.origin,
-            destination: route.destination,
-            vehicle_number: route.vehicle_number,
-            bus_starting_time: route.bus_starting_time,
-          })),
-          studentSamples: nextStudents.slice(0, 5).map((student: any) => ({
-            username: student.username,
-            name: student.name,
-            route_id: student.route_id,
-            route_name: student.route_name,
-            class_name: student.class_name,
-            section: student.section,
-            is_disabled: student.is_disabled,
-          })),
         });
       }
 
@@ -1159,13 +1022,6 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         return nextRoutes[0] ? Number(nextRoutes[0].id) : null;
       });
     } catch (error: any) {
-      if (DEBUG_BUS_MANAGER) {
-        console.error('[BusManagerDashboard] [map] dashboard bootstrap failed', {
-          status: error?.response?.status,
-          message: error?.response?.data?.message || error?.message || String(error),
-          responseData: error?.response?.data,
-        });
-      }
       Alert.alert(
         'Load failed',
         error?.response?.data?.message || 'Unable to load bus manager data from the server.'
@@ -1302,8 +1158,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
 
   const handleAddRoute = useCallback(async () => {
     if (saving) return;
-    const routeDestination = automaticDestination || newDestination.trim();
-    if (!newRouteName.trim() || !newOrigin.trim() || !routeDestination) {
+    if (!newRouteName.trim() || !newOrigin.trim() || !newDestination.trim()) {
       Alert.alert('Route details missing', 'Please fill route name, origin, and destination.');
       return;
     }
@@ -1315,11 +1170,11 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
         routeName: newRouteName.trim(),
         route_name: newRouteName.trim(),
         origin: newOrigin.trim(),
-        destination: routeDestination,
+        destination: newDestination.trim(),
       });
       setNewRouteName('');
       setNewOrigin('');
-      setNewDestination(automaticDestination);
+      setNewDestination('');
       await loadDashboard();
       Alert.alert('Success', 'Route created successfully.');
     } catch (error: any) {
@@ -1330,7 +1185,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     } finally {
       setSaving(false);
     }
-  }, [automaticDestination, loadDashboard, newDestination, newOrigin, newRouteName, schoolCode, saving]);
+  }, [loadDashboard, newDestination, newOrigin, newRouteName, schoolCode, saving]);
 
   const handleAssignStudent = useCallback(
     async (username: string) => {
@@ -1397,246 +1252,29 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
     loadDashboard();
   }, [loadDashboard]);
 
-  useEffect(() => {
-    const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (showDisabledStudents) {
-        setShowDisabledStudents(false);
-        return true;
-      }
-
-      if (showEligibleStudentsPage) {
-        setShowEligibleStudentsPage(false);
-        return true;
-      }
-
-      if (activeSection !== 'overview') {
-        setActiveSection('overview');
-        return true;
-      }
-
-      return false;
-    });
-
-    return () => backSubscription.remove();
-  }, [activeSection, showDisabledStudents, showEligibleStudentsPage]);
-
-  const disabledStudentsModal = (
-    <Modal
-      visible={showDisabledStudents}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowDisabledStudents(false)}
-    >
-      <View style={localStyles.disabledModalOverlay}>
-        <View style={localStyles.disabledModalCard}>
-          <View style={localStyles.disabledModalHeader}>
-            <Text style={localStyles.disabledModalTitle}>Disabled Students</Text>
-            <Pressable onPress={() => setShowDisabledStudents(false)} style={localStyles.disabledModalClose}>
-              <Ionicons name="close" size={18} color="#1C1C1C" />
-            </Pressable>
-          </View>
-          <Text style={localStyles.disabledModalSubtitle}>
-            Tap a student to move them back to the eligible list.
-          </Text>
-
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {allDisabledStudents.length === 0 ? (
-              <View style={localStyles.cardPanel}>
-                <Text style={localStyles.emptyText}>No disabled students yet.</Text>
-              </View>
-            ) : (
-              allDisabledStudents.map((student) => (
-                <Pressable
-                  key={student.username}
-                  style={localStyles.disabledStudentRow}
-                  onPress={() => {
-                    void handleEnableStudent(student.username);
-                  }}
-                >
-                  <View style={localStyles.disabledStudentTextWrap}>
-                    <Text style={localStyles.disabledStudentName}>{student.name}</Text>
-                    <Text style={localStyles.disabledStudentAddress} numberOfLines={2}>
-                      {student.address || 'No address'}
-                    </Text>
-                  </View>
-                  <Text style={localStyles.disabledStudentAction}>Enable</Text>
-                </Pressable>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  if (showEligibleStudentsPage) {
-    return (
-      <SafeAreaView style={[shellStyles.screen, localStyles.safeArea]}>
-        <StatusBar barStyle="dark-content" />
-        <View style={shellStyles.background}>
-          <View style={shellStyles.phoneShell}>
-            <View style={shellStyles.phoneFrame}>
-              <LinearGradient
-                pointerEvents="none"
-                colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={shellStyles.dashboardTopGradient}
-              />
-              <View style={shellStyles.toolbar}>
-                <Pressable
-                  style={localStyles.toolbarButton}
-                  onPress={() => setShowEligibleStudentsPage(false)}
-                >
-                  <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-                </Pressable>
-                <View style={localStyles.toolbarTitleWrap}>
-                  <Text style={localStyles.toolbarTitleText} numberOfLines={1}>
-                    Eligible Students
-                  </Text>
-                </View>
-                <View style={localStyles.toolbarInlineSpacer} />
-                <View style={localStyles.toolbarButtonPlaceholder} />
-              </View>
-
-              <ScrollView
-                style={shellStyles.scrollArea}
-                contentContainerStyle={localStyles.studentPageContent}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={localStyles.studentPageHeader}>
-                  <View style={localStyles.studentPageIcon}>
-                    <Ionicons name="people-outline" size={22} color="#1C1C1C" />
-                  </View>
-                  <View style={localStyles.studentPageHeaderText}>
-                    <Text style={localStyles.studentPageTitle}>Eligible students</Text>
-                    <Text style={localStyles.studentPageSubtitle}>
-                      {selectedRoute
-                        ? `${selectedRoute.routeName} has ${visibleEligibleStudents.length} active eligible students.`
-                        : 'Select a route from the dashboard to view eligible students.'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={localStyles.studentPageRouteCard}>
-                  <Text style={localStyles.cardPanelTitle}>Selected route</Text>
-                  {selectedRoute ? (
-                    <>
-                      <Text style={localStyles.summaryTitle}>{selectedRoute.routeName}</Text>
-                      <Text style={localStyles.summaryLine}>
-                        {(selectedRoute.origin || 'Unknown') + ' to ' + (selectedRoute.destination || 'Unknown')}
-                      </Text>
-                      <View style={localStyles.studentPageStatsRow}>
-                        <View style={localStyles.studentPageStat}>
-                          <Text style={localStyles.studentPageStatValue}>{visibleEligibleStudents.length}</Text>
-                          <Text style={localStyles.studentPageStatLabel}>Active</Text>
-                        </View>
-                        <View style={localStyles.studentPageStat}>
-                          <Text style={localStyles.studentPageStatValue}>{disabledEligibleStudents.length}</Text>
-                          <Text style={localStyles.studentPageStatLabel}>Disabled</Text>
-                        </View>
-                      </View>
-                    </>
-                  ) : (
-                    <Text style={localStyles.emptyText}>No route selected yet.</Text>
-                  )}
-                </View>
-
-                <View style={localStyles.sectionHeaderRow}>
-                  <Text style={localStyles.sectionTitle}>Students</Text>
-                  <TouchableOpacity
-                    style={[
-                      localStyles.disabledStudentsButton,
-                      allDisabledStudents.length === 0 && localStyles.disabledStudentsButtonDisabled,
-                    ]}
-                    onPress={() => setShowDisabledStudents(true)}
-                    disabled={allDisabledStudents.length === 0}
-                  >
-                    <Text style={localStyles.disabledStudentsButtonText}>
-                      Disabled ({allDisabledStudents.length})
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <Text style={localStyles.sectionSubtitle}>
-                  Swipe right to assign students to the selected route, or swipe left to unassign them.
-                </Text>
-
-                {selectedRoute && visibleEligibleStudents.length === 0 ? (
-                  <View style={localStyles.cardPanel}>
-                    <Text style={localStyles.emptyText}>
-                      {eligibleStudents.length === 0
-                        ? 'No students matched this route address yet. Try another route or update student addresses.'
-                        : 'All eligible students are disabled right now. Enable one to show it here.'}
-                    </Text>
-                  </View>
-                ) : !selectedRoute ? (
-                  <View style={localStyles.cardPanel}>
-                    <Text style={localStyles.emptyText}>Select a route to view eligible students.</Text>
-                  </View>
-                ) : (
-                  visibleEligibleStudents.map((student) => {
-                    const assignedRoute = routes.find((route) => String(route.id) === String(student.assignedRouteId));
-                    return (
-                      <StudentSwipeCard
-                        key={student.username}
-                        student={student}
-                        routeName={student.assignedRouteName || assignedRoute?.routeName || 'Unassigned'}
-                        onAssign={() => handleAssignStudent(student.username)}
-                        onDelete={() => handleDeleteStudent(student.username)}
-                        onDisable={() => {
-                          void toggleDisableStudent(student.username);
-                        }}
-                        disabled={disabledStudentUsernameSet.has(student.username)}
-                      />
-                    );
-                  })
-                )}
-
-                <View style={localStyles.footerSpacer} />
-              </ScrollView>
-
-              {disabledStudentsModal}
-            </View>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={[shellStyles.screen, localStyles.safeArea]}>
       <StatusBar barStyle="dark-content" />
       <View style={shellStyles.background}>
         <View style={shellStyles.phoneShell}>
           <View style={shellStyles.phoneFrame}>
-            <LinearGradient
-              pointerEvents="none"
-              colors={['#d2c2eeff', '#d2c2eeff', '#d2c2eeff']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={shellStyles.dashboardTopGradient}
-            />
             <View style={shellStyles.toolbar}>
-              {activeSection === 'overview' ? (
-                <View style={shellStyles.toolbarBrand}>
-                  <Image source={logoImage} style={shellStyles.toolbarBrandLogo} resizeMode="contain" />
-                </View>
-              ) : (
-                <Pressable
-                  style={localStyles.toolbarButton}
-                  onPress={() => setActiveSection('overview')}
-                >
-                  <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
-                </Pressable>
-              )}
-              <View style={localStyles.toolbarTitleWrap}>
-                <Text style={localStyles.toolbarTitleText} numberOfLines={1}>
-                  {activeSection === 'overview' ? 'Bus Manager Dashboard' : activeSectionLabel}
+              <View style={shellStyles.toolbarBrand}>
+                <Image source={logoImage} style={shellStyles.toolbarBrandLogo} resizeMode="contain" />
+              </View>
+              <View style={shellStyles.toolbarCenterAbsolute}>
+                <Text style={shellStyles.toolbarBrandName} numberOfLines={1}>
+                  Bus Manager Dashboard
                 </Text>
               
               </View>
-              <View style={localStyles.toolbarButtonPlaceholder} />
-             
+              <View style={shellStyles.toolbarSpacer} />  
+              <Pressable
+                style={localStyles.toolbarButton}
+                onPress={handleOpenProfilePanel}
+              >
+                <Ionicons name="person-outline" size={18} color="#FFFFFF" />
+              </Pressable>
             </View>
 
             <ScrollView
@@ -1665,100 +1303,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                   </View>
                 </View>
 
-               
-
-              </View>
-
-              {/* <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={localStyles.sectionNavContent}
-                style={localStyles.sectionNav}
-              >
-                {sectionTabs.map((tab) => {
-                  const active = activeSection === tab.key;
-                  return (
-                    <Pressable
-                      key={tab.key}
-                      style={[localStyles.sectionNavChip, active && localStyles.sectionNavChipActive]}
-                      onPress={() => scrollToSection(tab.key)}
-                    >
-                      <Ionicons
-                        name={tab.icon as any}
-                        size={16}
-                        color={active ? '#FFFFFF' : '#1C1C1C'}
-                      />
-                      <Text style={[localStyles.sectionNavChipText, active && localStyles.sectionNavChipTextActive]}>
-                        {tab.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView> */}
-
-              {activeSection === 'overview' ? (
-              <>
-              <LinearGradient
-                colors={['#fff', '#fff', '#fff']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={localStyles.routeMapBoard}
-              >
-                <View style={localStyles.routeMapHeader}>
-                  <View style={localStyles.routeMapHeaderLeft}>
-                    <View style={localStyles.routeMapSchoolPin}>
-                      <Ionicons name="map-outline" size={18} color="#000" />
-                    </View>
-                    <View>
-                      <Text style={localStyles.routeMapHeaderTitle}>Route overview</Text>
-                      <Text style={localStyles.routeMapHeaderSubtitle}>
-                        {schoolAddress
-                          ? `All routes shown from the institute address to each route endpoint`
-                          : 'Institute address will appear here when available'}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={localStyles.routeMapLegend}>
-                    <View style={localStyles.routeMapLegendItem}>
-                      <Ionicons name="business" size={12} color="#FFFFFF" />
-                      <Text style={localStyles.routeMapLegendText}>Institute</Text>
-                    </View>
-                    <View style={localStyles.routeMapLegendItem}>
-                      <Ionicons name="ellipse" size={12} color="#F4E9FF" />
-                      <Text style={localStyles.routeMapLegendText}>Route stops</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {routeMapLoading ? (
-                  <View style={localStyles.mapFallback}>
-                    <Text style={localStyles.mapFallbackText}>Loading route overview...</Text>
-                  </View>
-                ) : routeMapSchoolPoint || routeMapRoutes.length > 0 ? (
-                  <WebView
-                    key={`bus-map-${schoolAddress}-${routeMapRoutes.length}`}
-                    originWhitelist={['*']}
-                    source={{ html: routeMapHtml }}
-                    style={localStyles.routeMapCanvas}
-                    javaScriptEnabled
-                    domStorageEnabled
-                    startInLoadingState
-                    renderLoading={() => (
-                      <View style={localStyles.mapFallback}>
-                        <Text style={localStyles.mapFallbackText}>Loading route overview...</Text>
-                      </View>
-                    )}
-                  />
-                ) : (
-                  <View style={localStyles.mapFallback}>
-                    <Text style={localStyles.mapFallbackText}>
-                      {routeMapError || 'The route overview will appear here once institute and route addresses are geocoded.'}
-                    </Text>
-                  </View>
-                )}
-              </LinearGradient>
-
-               <View style={localStyles.summaryPillsRow}>
+                <View style={localStyles.summaryPillsRow}>
                   <View style={localStyles.summaryPill}>
                     <Text style={localStyles.summaryPillValue}>{routes.length}</Text>
                     <Text style={localStyles.summaryPillLabel}>Routes</Text>
@@ -1767,17 +1312,21 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.summaryPillValue}>{driverCount}</Text>
                     <Text style={localStyles.summaryPillLabel}>Drivers</Text>
                   </View>
-		                </View>
-              </>
-              ) : null}
+                  <View style={localStyles.summaryPill}>
+                    <Text style={localStyles.summaryPillValue}>{assignedStudentsCount}</Text>
+                    <Text style={localStyles.summaryPillLabel}>Assigned</Text>
+                  </View>
+                </View>
 
-	              {activeSection !== 'overview' ? (
-	              <View
-	                style={localStyles.sectionBlock}
-	                onLayout={(event) => {
-	                  sectionOffsets.current.routes = event.nativeEvent.layout.y;
-	                }}
-	              >
+               
+              </View>
+
+              <View
+                style={localStyles.sectionBlock}
+                onLayout={(event) => {
+                  sectionOffsets.current.routes = event.nativeEvent.layout.y;
+                }}
+              >
                 <Text style={localStyles.sectionTitle}>Select Route</Text>
                 <Text style={localStyles.sectionSubtitle}>
                   Tap one route to work on it. The active route is highlighted below.
@@ -1786,49 +1335,29 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={localStyles.routeStrip}>
                   {routes.map((route) => {
                     const active = route.id === selectedRouteId;
-                    const routeStudents = students.filter((student) => addressMatchesRoute(student.address, route));
-                    const assignedCount = routeStudents.length;
-                    const activeCount = routeStudents.filter((student) => !disabledStudentUsernameSet.has(student.username)).length;
-                    const disabledCount = routeStudents.filter((student) => disabledStudentUsernameSet.has(student.username)).length;
                     return (
                       <Pressable
                         key={route.id}
-                        style={[
-                          parentDashboardCardStyles.cardWrapper,
-                          active && parentDashboardCardStyles.cardActive,
-                        ]}
+                        style={[localStyles.routeCard, active && localStyles.routeCardActive]}
                         onPress={() => setSelectedRouteId(route.id)}
                       >
-                        <View style={[parentDashboardCardStyles.card, active && parentDashboardCardStyles.cardActive]}>
-                          <View style={shellStyles.dashboardGridCornerAccent}>
-                            <LinearGradient
-                            colors={[...quickActionGradientColors]}
-                            start={{ x: 0.05, y: 0.05 }}
-                            end={{ x: 0.95, y: 0.95 }}
-                            style={localStyles.quickActionGradient}
-                          >
-                          <View style={parentDashboardCardStyles.iconWrap}>
-                            <Ionicons name="bus-outline" size={30} color="#000000" />
-                          </View>
-                          <View style={parentDashboardCardStyles.cardContent}>
-                            <View style={parentDashboardCardStyles.textBlock}>
-                              <Text style={parentDashboardCardStyles.label} numberOfLines={2}>
-                                {route.routeName}
-                              </Text>
-                              <Text style={parentDashboardCardStyles.subtitle} numberOfLines={2}>
-                                {(route.origin || 'Unknown') + ' to ' + (route.destination || 'Unknown')}
-                              </Text>
-                              <View style={localStyles.routeCardFooter}>
-                              
-                                <Text style={localStyles.routeCardFooterText} numberOfLines={1}>
-                                  {activeCount} active
-                                </Text>
-                                <Text style={localStyles.routeCardFooterText} numberOfLines={1}>
-                                  {disabledCount} disabled
-                                </Text>
-                              </View>
-                            </View>
-                          </View></LinearGradient></View>
+                        <View style={localStyles.routeCardHeader}>
+                          <Ionicons name="bus-outline" size={16} color={active ? '#FFFFFF' : '#1C1C1C'} />
+                          <Text style={[localStyles.routeCardHeaderTitle, active && localStyles.routeCardTitleActive]}>
+                            {route.routeName}
+                          </Text>
+                        </View>
+                        <Text style={[localStyles.routeCardMeta, active && localStyles.routeCardMetaActive]}>
+                          {(route.origin || 'Unknown') + ' to ' + (route.destination || 'Unknown')}
+                        </Text>
+                        <View style={localStyles.routeCardFooter}>
+                          <Text style={[localStyles.routeCardFooterText, active && localStyles.routeCardFooterTextActive]}>
+                            {
+                              students
+                                .filter((student) => addressMatchesRoute(student.address, route))
+                                .filter((student) => !disabledStudentUsernameSet.has(student.username)).length
+                            } active
+                          </Text>
                         </View>
                       </Pressable>
                     );
@@ -1852,24 +1381,17 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                       <Text style={localStyles.summaryLine}>
                         Experience: {selectedRoute.driverExperience || 'Not assigned'}
                       </Text>
-                      <TouchableOpacity
-                        style={localStyles.eligibleStudentsButton}
-                        onPress={() => setShowEligibleStudentsPage(true)}
-                      >
-                        <Ionicons name="people-outline" size={17} color="#FFFFFF" />
-                        <Text style={localStyles.eligibleStudentsButtonText}>
-                          View eligible students
-                        </Text>
-                      </TouchableOpacity>
+                      <Text style={localStyles.summaryLine}>
+                        Students: {visibleEligibleStudents.length}
+                      </Text>
                     </View>
-	                  ) : (
-	                    <Text style={localStyles.emptyText}>No route selected yet.</Text>
-	                  )}
-	                </View>
-	              </View>
-	              ) : null}
+                  ) : (
+                    <Text style={localStyles.emptyText}>No route selected yet.</Text>
+                  )}
+                </View>
+              </View>
 
-              {/* <View style={localStyles.routeMapBoard}>
+              <View style={localStyles.routeMapBoard}>
                 <View style={localStyles.routeMapHeader}>
                   <View style={localStyles.routeMapHeaderLeft}>
                     <View style={localStyles.routeMapSchoolPin}>
@@ -1922,8 +1444,8 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     </Text>
                   </View>
                 )}
-              </View> */}
- {/* {activeSection === 'overview' ? (
+              </View>
+
               <View style={localStyles.quickActionsSection}>
                 <View style={localStyles.sectionTitleRow}>
                   <Ionicons name="grid-outline" size={18} color="#1C1C1C" />
@@ -1935,64 +1457,20 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                       {column.map((card) => (
                         <Pressable
                           key={card.title}
-                          style={localStyles.quickActionCard}
+                          style={[localStyles.quickActionCard, { backgroundColor: card.accent }]}
                           onPress={() => scrollToSection(card.target)}
                         >
-                          <LinearGradient
-                            colors={[...quickActionGradientColors]}
-                            start={{ x: 0.05, y: 0.05 }}
-                            end={{ x: 0.95, y: 0.95 }}
-                            style={localStyles.quickActionGradient}
-                          >
-                            <View style={localStyles.quickActionIconWrap}>
-                              <Ionicons name={card.icon as any} size={22} color="#000" />
-                            </View>
-                            <Text style={localStyles.quickActionTitle}>{card.title}</Text>
-                            <Text style={localStyles.quickActionSubtitle}>{card.subtitle}</Text>
-                          </LinearGradient>
-                        </Pressable>
-                      ))}
-                    </View>
-                  ))}
-                </View>
-              </View>
-              ) : null} */}
-              {activeSection === 'overview' ? (
-              <View style={localStyles.quickActionsSection}>
-                <View style={localStyles.sectionTitleRow}>
-                  <Ionicons name="grid-outline" size={18} color="#1C1C1C" />
-                  <Text style={localStyles.sectionTitle}>Quick Actions</Text>
-                </View>
-                <View style={localStyles.quickActionsGrid}>
-                  {dashboardCardColumns.map((column, columnIndex) => (
-                    <View key={`bus-quick-actions-column-${columnIndex}`} style={localStyles.quickActionsColumn}>
-                      {column.map((card) => (
-                        <Pressable
-                          key={card.title}
- style={[
-                          parentDashboardCardStyles.cardWrapper,
-                        ]}                          onPress={() => scrollToSection(card.target)}
-                        >
-                     <View style={shellStyles.dashboardGridCornerAccent}>
-                            <LinearGradient
-                              colors={['#d2c2eeff', '#a174eb', '#6826df']}
-                              start={{ x: 0, y: 0 }}
-                              end={{ x: 1, y: 1 }}
-                              style={shellStyles.dashboardGridCornerAccentFill}
-                            />
+                          <View style={localStyles.quickActionIconWrap}>
+                            <Ionicons name={card.icon as any} size={22} color="#1C1C1C" />
                           </View>
-                            <View style={localStyles.quickActionIconWrap}>
-                              <Ionicons name={card.icon as any} size={22} color="#000" />
-                            </View>
-                            <Text style={localStyles.quickActionTitle}>{card.title}</Text>
-                            <Text style={localStyles.quickActionSubtitle}>{card.subtitle}</Text>
+                          <Text style={localStyles.quickActionTitle}>{card.title}</Text>
+                          <Text style={localStyles.quickActionSubtitle}>{card.subtitle}</Text>
                         </Pressable>
                       ))}
                     </View>
                   ))}
                 </View>
               </View>
-              ) : null}
 
               {loading ? (
                 <View style={localStyles.infoCard}>
@@ -2000,17 +1478,17 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                 </View>
               ) : null}
 
-              {activeSection === 'vehicle' ? (
-                <View style={localStyles.cardPanel}>
-                  <Text style={localStyles.cardPanelTitle}>Vehicle</Text>
-                  <TextInput
-                    value={vehicleNumber}
-                    onChangeText={setVehicleNumber}
-                    placeholder="TN 01 AB 1234"
-                    placeholderTextColor="#8C97A4"
-                    style={localStyles.input}
-                    editable={!saving}
-                  />
+                <View style={localStyles.formGrid}>
+                  <View style={localStyles.cardPanelHalf}>
+                    <Text style={localStyles.cardPanelTitle}>Vehicle</Text>
+                    <TextInput
+                      value={vehicleNumber}
+                      onChangeText={setVehicleNumber}
+                      placeholder="TN 01 AB 1234"
+                      placeholderTextColor="#8C97A4"
+                      style={localStyles.input}
+                      editable={!saving}
+                    />
                   <TouchableOpacity
                     style={[localStyles.primaryButton, saving && localStyles.buttonDisabled]}
                     onPress={handleAssignVehicle}
@@ -2019,10 +1497,8 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.primaryButtonText}>Save Vehicle</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null}
 
-              {activeSection === 'driver' ? (
-                <View style={[localStyles.cardPanelHalf, stackFormCards && localStyles.cardPanelFull]}>
+                <View style={localStyles.cardPanelHalf}>
                   <Text style={localStyles.cardPanelTitle}>Driver</Text>
                   <TextInput
                     value={driverName}
@@ -2048,9 +1524,8 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.primaryButtonText}>Save Driver</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null}
+              </View>
 
-              {activeSection === 'startTime' ? (
                 <View style={localStyles.cardPanel}>
                   <Text style={localStyles.cardPanelTitle}>Starting time</Text>
                   <TextInput
@@ -2069,9 +1544,7 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.secondaryButtonText}>Save Time</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null}
 
-              {activeSection === 'routes' ? (
                 <View style={localStyles.cardPanel}>
                   <Text style={localStyles.cardPanelTitle}>New route</Text>
                   <TextInput
@@ -2094,10 +1567,10 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <TextInput
                       value={newDestination}
                       onChangeText={setNewDestination}
-                      placeholder={automaticDestination ? 'Institute address' : 'Destination'}
+                      placeholder="Destination"
                       placeholderTextColor="#8C97A4"
                       style={[localStyles.input, localStyles.halfInput]}
-                      editable={!saving && !automaticDestination}
+                      editable={!saving}
                     />
                   </View>
                   <TouchableOpacity
@@ -2108,37 +1581,110 @@ const BusManagerDashboard: React.FC<Props> = ({ navigation }) => {
                     <Text style={localStyles.secondaryButtonText}>Add Route</Text>
                   </TouchableOpacity>
                 </View>
-              ) : null}
 
-              {activeSection === 'students' ? (
-                <View style={localStyles.cardPanel}>
-                  <Text style={localStyles.cardPanelTitle}>Students</Text>
-                  <Text style={localStyles.summaryLine}>
-                    {selectedRoute
-                      ? `${selectedRoute.routeName} has ${visibleEligibleStudents.length} active eligible students.`
-                      : 'Select a route first to manage students.'}
-                  </Text>
+              <View
+                style={localStyles.sectionBlock}
+                onLayout={(event) => {
+                  sectionOffsets.current.students = event.nativeEvent.layout.y;
+                }}
+              >
+                <View style={localStyles.sectionHeaderRow}>
+                  <Text style={localStyles.sectionTitle}>Eligible students</Text>
                   <TouchableOpacity
-                    style={localStyles.eligibleStudentsButton}
-                    onPress={() => setShowEligibleStudentsPage(true)}
-                    disabled={!selectedRoute}
+                    style={[
+                      localStyles.disabledStudentsButton,
+                      allDisabledStudents.length === 0 && localStyles.disabledStudentsButtonDisabled,
+                    ]}
+                    onPress={() => setShowDisabledStudents(true)}
+                    disabled={allDisabledStudents.length === 0}
                   >
-                    <Ionicons name="people-outline" size={17} color="#FFFFFF" />
-                    <Text style={localStyles.eligibleStudentsButtonText}>Open eligible students</Text>
+                    <Text style={localStyles.disabledStudentsButtonText}>
+                      Disabled ({allDisabledStudents.length})
+                    </Text>
                   </TouchableOpacity>
                 </View>
-              ) : null}
+                <Text style={localStyles.sectionSubtitle}>
+                  These students match the selected route address. Swipe right to assign, swipe left to remove.
+                </Text>
 
-              {activeSection === 'expense' ? (
-                <View style={localStyles.cardPanel}>
-                  <Text style={localStyles.cardPanelTitle}>Expense</Text>
-                  <Text style={localStyles.emptyText}>
-                    Expense entry is ready for a separate form. Add fuel, service, or repair fields here when the backend endpoint is available.
-                  </Text>
+                {selectedRoute && visibleEligibleStudents.length === 0 ? (
+                  <View style={localStyles.cardPanel}>
+                    <Text style={localStyles.emptyText}>
+                      {eligibleStudents.length === 0
+                        ? 'No students matched this route address yet. Try another route or update student addresses.'
+                        : 'All eligible students are disabled right now. Enable one to show it here.'}
+                    </Text>
+                  </View>
+                ) : !selectedRoute ? (
+                  <View style={localStyles.cardPanel}>
+                    <Text style={localStyles.emptyText}>Select a route to view eligible students.</Text>
+                  </View>
+                ) : (
+                  visibleEligibleStudents.map((student) => {
+                    const assignedRoute = routes.find((route) => String(route.id) === String(student.assignedRouteId));
+                    return (
+                      <StudentSwipeCard
+                        key={student.username}
+                        student={student}
+                        routeName={student.assignedRouteName || assignedRoute?.routeName || 'Unassigned'}
+                        onAssign={() => handleAssignStudent(student.username)}
+                        onDelete={() => handleDeleteStudent(student.username)}
+                        onDisable={() => {
+                          void toggleDisableStudent(student.username);
+                        }}
+                        disabled={disabledStudentUsernameSet.has(student.username)}
+                      />
+                    );
+                  })
+                )}
+              </View>
+
+              <Modal
+                visible={showDisabledStudents}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowDisabledStudents(false)}
+              >
+                <View style={localStyles.disabledModalOverlay}>
+                  <View style={localStyles.disabledModalCard}>
+                    <View style={localStyles.disabledModalHeader}>
+                      <Text style={localStyles.disabledModalTitle}>Disabled Students</Text>
+                      <Pressable onPress={() => setShowDisabledStudents(false)} style={localStyles.disabledModalClose}>
+                        <Ionicons name="close" size={18} color="#1C1C1C" />
+                      </Pressable>
+                    </View>
+                    <Text style={localStyles.disabledModalSubtitle}>
+                      Tap a student to move them back to the eligible list.
+                    </Text>
+
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      {allDisabledStudents.length === 0 ? (
+                        <View style={localStyles.cardPanel}>
+                          <Text style={localStyles.emptyText}>No disabled students yet.</Text>
+                        </View>
+                      ) : (
+                        allDisabledStudents.map((student) => (
+                          <Pressable
+                            key={student.username}
+                            style={localStyles.disabledStudentRow}
+                            onPress={() => {
+                              void handleEnableStudent(student.username);
+                            }}
+                          >
+                            <View style={localStyles.disabledStudentTextWrap}>
+                              <Text style={localStyles.disabledStudentName}>{student.name}</Text>
+                              <Text style={localStyles.disabledStudentAddress} numberOfLines={2}>
+                                {student.address || 'No address'}
+                              </Text>
+                            </View>
+                            <Text style={localStyles.disabledStudentAction}>Enable</Text>
+                          </Pressable>
+                        ))
+                      )}
+                    </ScrollView>
+                  </View>
                 </View>
-              ) : null}
-
-              {disabledStudentsModal}
+              </Modal>
 
               <View style={localStyles.footerSpacer} />
             </ScrollView>
@@ -2267,7 +1813,7 @@ const localStyles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 4,
-    paddingBottom: 128,
+    paddingBottom: 18,
   },
   toolbarButton: {
     width: 38,
@@ -2277,60 +1823,12 @@ const localStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  toolbarButtonPlaceholder: {
-    width: 38,
-    height: 38,
-  },
-  toolbarTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  toolbarTitleText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  toolbarInlineSpacer: {
-    width: 1,
-  },
   sectionAnchor: {
     height: 1,
   },
-  sectionNav: {
-    marginBottom: 12,
-  },
-  sectionNavContent: {
-    gap: 8,
-    paddingRight: 12,
-  },
-  sectionNavChip: {
-    minHeight: 38,
-    paddingHorizontal: 13,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E4EA',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionNavChipActive: {
-    backgroundColor: '#6D2DE1',
-    borderColor: '#6D2DE1',
-  },
-  sectionNavChipText: {
-    color: '#1C1C1C',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  sectionNavChipTextActive: {
-    color: '#FFFFFF',
-  },
   heroCard: {
     borderRadius: 18,
-    backgroundColor: 'transaparent',
+    backgroundColor: '#F6F6F7',
     padding: 14,
     marginBottom: 14,
     overflow: 'hidden',
@@ -2354,7 +1852,7 @@ const localStyles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'transaparent',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -2431,7 +1929,6 @@ const localStyles = StyleSheet.create({
   quickActionsGrid: {
     flexDirection: 'row',
     gap: 8,
-    backgroundColor:'#fff'
   },
   quickActionsColumn: {
     flex: 1,
@@ -2439,32 +1936,29 @@ const localStyles = StyleSheet.create({
   },
   quickActionCard: {
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-    height: 124,
-    overflow: 'hidden',
-  },
-  quickActionGradient: {
-    flex: 1,
     padding: 12,
+    borderWidth: 1,
+    borderColor: '#D8D8DC',
+    height: 124,
     justifyContent: 'space-between',
   },
   quickActionIconWrap: {
     width: 36,
     height: 36,
     borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   quickActionTitle: {
-    color: '#FFFFFF',
+    color: '#131313',
     fontSize: 13,
     fontWeight: '900',
     marginBottom: 4,
   },
   quickActionSubtitle: {
-    color: 'rgba(255,255,255,0.88)',
+    color: '#5E5E62',
     fontSize: 11.5,
     lineHeight: 15,
   },
@@ -2478,10 +1972,9 @@ const localStyles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
+    borderColor: '#D8D8DC',
+    backgroundColor: '#FAFAFB',
     padding: 12,
-    height:height*0.6,
-    overflow: 'hidden',
   },
   routeMapHeader: {
     flexDirection: 'row',
@@ -2500,20 +1993,20 @@ const localStyles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: '#EDF3E8',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.32)',
+    borderColor: '#DDE8D5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   routeMapHeaderTitle: {
-    color: '#000',
+    color: '#131313',
     fontSize: 13.5,
     fontWeight: '900',
     marginBottom: 2,
   },
   routeMapHeaderSubtitle: {
-    color: 'rgba(0,0,0,0.82)',
+    color: '#5E5E62',
     fontSize: 11.5,
     lineHeight: 15,
     maxWidth: 210,
@@ -2528,7 +2021,7 @@ const localStyles = StyleSheet.create({
     gap: 4,
   },
   routeMapLegendText: {
-    color: '#000',
+    color: '#5E5E62',
     fontSize: 10.5,
     fontWeight: '700',
   },
@@ -2539,7 +2032,7 @@ const localStyles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: '#F5F8FB',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.36)',
+    borderColor: '#D8D8DC',
     overflow: 'hidden',
   },
   routeMapGridLineHorizontal: {
@@ -2620,7 +2113,7 @@ const localStyles = StyleSheet.create({
     backgroundColor: '#F5F8FB',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.36)',
+    borderColor: '#D8D8DC',
   },
   mapFallbackText: {
     color: '#5E5E62',
@@ -2824,6 +2317,53 @@ const localStyles = StyleSheet.create({
     paddingRight: 4,
     marginBottom: 12,
   },
+  routeCard: {
+    width: 194,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8D8DC',
+    padding: 12,
+    marginRight: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
+  },
+  routeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  routeCardActive: {
+    backgroundColor: '#3F3F40',
+    borderColor: '#3F3F40',
+  },
+  routeCardTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1C1C1C',
+    marginBottom: 4,
+  },
+  routeCardHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#1C1C1C',
+    flexShrink: 1,
+  },
+  routeCardTitleActive: {
+    color: '#FFFFFF',
+  },
+  routeCardMeta: {
+    fontSize: 10.5,
+    lineHeight: 14,
+    color: '#5B5B60',
+  },
+  routeCardMetaActive: {
+    color: '#EDEDED',
+  },
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2831,17 +2371,15 @@ const localStyles = StyleSheet.create({
     marginBottom: 10,
   },
   routeCardFooter: {
-    width: '100%',
-    marginTop: 8,
-    alignItems: 'flex-end',
+    marginTop: 10,
   },
   routeCardFooterText: {
-    color: '#6C6C74',
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: '700',
-    textAlign: 'right',
-    paddingHorizontal: 4,
+    color: '#6A6A70',
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  routeCardFooterTextActive: {
+    color: '#EDEDED',
   },
   cardPanel: {
     borderRadius: 18,
@@ -2878,92 +2416,6 @@ const localStyles = StyleSheet.create({
     color: '#5B5B60',
     marginTop: 4,
   },
-  eligibleStudentsButton: {
-    marginTop: 14,
-    backgroundColor: '#3F3F40',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  eligibleStudentsButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '900',
-  },
-  studentPageContent: {
-    paddingHorizontal: 4,
-    paddingBottom: 18,
-  },
-  studentPageHeader: {
-    borderRadius: 18,
-    backgroundColor: '#F6F6F7',
-    padding: 14,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  studentPageIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E4EA',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  studentPageHeaderText: {
-    flex: 1,
-  },
-  studentPageTitle: {
-    color: '#131313',
-    fontSize: 18,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  studentPageSubtitle: {
-    color: '#5E5E62',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  studentPageRouteCard: {
-    borderRadius: 18,
-    backgroundColor: '#F6F6F7',
-    padding: 14,
-    marginBottom: 12,
-  },
-  studentPageStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  studentPageStat: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E4EA',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  studentPageStatValue: {
-    color: '#131313',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  studentPageStatLabel: {
-    color: '#5B5B60',
-    marginTop: 3,
-    fontSize: 10.5,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
   emptyText: {
     color: '#5B5B60',
   },
@@ -2971,12 +2423,6 @@ const localStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 12,
-  },
-  formGridStacked: {
-    flexDirection: 'column',
-  },
-  cardPanelFull: {
-    flex: 0,
   },
   rowInputs: {
     flexDirection: 'row',
@@ -3144,7 +2590,7 @@ const localStyles = StyleSheet.create({
     fontSize: 11.5,
   },
   footerSpacer: {
-    height: 120,
+    height: 12,
   },
 });
 

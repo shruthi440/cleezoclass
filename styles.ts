@@ -1472,6 +1472,7 @@ export const attendanceStyles = StyleSheet.create({
 borderWidth: 1,
 borderColor: '#f6f6f7',
     padding: 10,
+    marginBottom: 14,
   },
   cardLabel: {
     fontSize: 12,
@@ -1579,6 +1580,7 @@ borderColor: '#f6f6f7',
     padding: 0,
     minHeight: 0,
     overflow: 'visible',
+    marginTop: 40,
   },
   gridScroll: {
     flex: 1,
